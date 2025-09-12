@@ -4,6 +4,8 @@ from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
 from .models import Comedian, VotingSession, Vote, Ticket, Payment
+from django.core.cache import cache
+from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 
 
 def whatsapp_api_call(payload):
@@ -114,7 +116,20 @@ def process_message(data):
 
 def handle_text_message(phone_number, text):
     """Handle text messages"""
-    if text in ['hi', 'hello', 'start', 'kupiga kura']:
+    # Check for clear session command
+    if text == '#':
+        clear_user_session(phone_number)
+        send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
+        send_welcome_message(phone_number)
+        return
+    
+    # Check if user has an ongoing session
+    if has_ongoing_session(phone_number):
+        send_ongoing_session_message(phone_number)
+        return
+    
+    # Handle start commands
+    if text in ['hi', 'hello', 'start', 'kupiga kura', 'anza']:
         send_welcome_message(phone_number)
     else:
         send_welcome_message(phone_number)
@@ -125,6 +140,10 @@ def handle_button_click(phone_number, button_id):
     if button_id == 'start_voting':
         send_comedians_list(phone_number)
     elif button_id == 'play_again':
+        send_welcome_message(phone_number)
+    elif button_id == 'clear_session':
+        clear_user_session(phone_number)
+        send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
         send_welcome_message(phone_number)
     else:
         send_welcome_message(phone_number)
@@ -148,7 +167,9 @@ def handle_list_selection(phone_number, list_id):
 def send_welcome_message(phone_number):
     """Send welcome message with voting button"""
     header = "Comedian Bora wa Mwezi"
-    body = """Karibu kuchagua comedian bora wa mwezi, Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa."""
+    body = """Karibu kuchagua comedian bora wa mwezi, Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
+
+Andika # ili ufute session yoyote inaendelea."""
     footer = "Chagua chini ili uanze"
     
     buttons = [
@@ -206,6 +227,13 @@ def send_vote_confirmation(phone_number, comedian_name):
             amount=1000,  # Default, will be updated
             is_paid=False
         )
+        
+        # Set session data
+        set_user_session(phone_number, {
+            'comedian_id': comedian.id,
+            'vote_id': vote.id,
+            'step': 'quantity_selection'
+        })
         
         header = f"Umemchagua {comedian_name}"
         body = "Kamalisha Kupiga Kura\n\nChagua idadi ya kura unayotaka kupiga:"
@@ -268,6 +296,9 @@ def process_payment(phone_number, vote, quantity):
             
             # Generate tickets
             generate_tickets(vote)
+            
+            # Clear session after successful payment
+            clear_user_session(phone_number)
             
             # Send confirmation message
             send_payment_confirmation(phone_number, vote)
