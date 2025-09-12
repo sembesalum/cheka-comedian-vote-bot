@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WhatsApp Bot Logs</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { background: #2c3e50; color: white; padding: 15px; margin: -20px -20px 20px -20px; border-radius: 8px 8px 0 0; }
+        .log-entry { margin: 5px 0; padding: 8px; border-left: 4px solid #3498db; background: #f8f9fa; }
+        .error-entry { border-left-color: #e74c3c; background: #fdf2f2; }
+        .warning-entry { border-left-color: #f39c12; background: #fef9e7; }
+        .info-entry { border-left-color: #27ae60; background: #f0f9f0; }
+        .timestamp { color: #7f8c8d; font-size: 0.9em; }
+        .level { font-weight: bold; margin-right: 10px; }
+        .error { color: #e74c3c; }
+        .warning { color: #f39c12; }
+        .info { color: #27ae60; }
+        .debug { color: #3498db; }
+        .controls { margin-bottom: 20px; }
+        .btn { padding: 8px 16px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-success { background: #27ae60; color: white; }
+        .stats { background: #ecf0f1; padding: 15px; border-radius: 4px; margin-bottom: 20px; }
+        .refresh { float: right; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 WhatsApp Bot Logs</h1>
+            <div class="refresh">
+                <a href="?refresh=1" class="btn btn-primary">🔄 Refresh</a>
+                <a href="/api/errors/" class="btn btn-danger">❌ Errors Only</a>
+                <a href="/api/vote-stats/" class="btn btn-success">📊 Vote Stats</a>
+            </div>
+        </div>
+        
+        <div class="stats">
+            <strong>Log File:</strong> {{ log_file }}<br>
+            <strong>Total Lines:</strong> {{ total_lines }}<br>
+            <strong>Showing:</strong> {{ recent_lines }} recent lines
+        </div>
+        
+        <div class="controls">
+            <a href="/api/logs/" class="btn btn-primary">📋 All Logs</a>
+            <a href="/api/errors/" class="btn btn-danger">❌ Errors Only</a>
+            <a href="/api/votes/" class="btn btn-success">🗳️ Votes</a>
+            <a href="/api/vote-stats/" class="btn btn-success">📊 Statistics</a>
+        </div>
+        
+        <div class="logs">
+            {% for log in logs %}
+                <div class="log-entry {% if 'ERROR' in log %}error-entry{% elif 'WARNING' in log %}warning-entry{% elif 'INFO' in log %}info-entry{% endif %}">
+                    <span class="timestamp">{{ log|slice:":19" }}</span>
+                    <span class="level {% if 'ERROR' in log %}error{% elif 'WARNING' in log %}warning{% elif 'INFO' in log %}info{% else %}debug{% endif %}">
+                        {% if 'ERROR' in log %}ERROR{% elif 'WARNING' in log %}WARNING{% elif 'INFO' in log %}INFO{% else %}DEBUG{% endif %}
+                    </span>
+                    {{ log|slice:"20:" }}
+                </div>
+            {% empty %}
+                <div class="log-entry">
+                    <p>No logs found. The bot hasn't been used yet or logs are not being generated.</p>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

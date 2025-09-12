@@ -6,6 +6,7 @@ from django.db import transaction
 from .models import Comedian, VotingSession, Vote, Ticket, Payment
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
+from .logger import log_error, log_message, log_payment, log_session
 
 
 def whatsapp_api_call(payload):
@@ -22,9 +23,11 @@ def whatsapp_api_call(payload):
             timeout=10
         )
         response.raise_for_status()
-        return response.json()
+        result = response.json()
+        log_message('system', 'api_call', f"Success: {result}")
+        return result
     except requests.exceptions.RequestException as e:
-        print(f"API Error: {str(e)}")
+        log_error(f"WhatsApp API Error: {str(e)}", extra_data={'payload': payload})
         return None
 
 
@@ -116,8 +119,11 @@ def process_message(data):
 
 def handle_text_message(phone_number, text):
     """Handle text messages"""
+    log_message(phone_number, 'text', text)
+    
     # Check for clear session command
     if text == '#':
+        log_session(phone_number, 'clear_session')
         clear_user_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
         send_welcome_message(phone_number)
@@ -125,13 +131,16 @@ def handle_text_message(phone_number, text):
     
     # Check if user has an ongoing session
     if has_ongoing_session(phone_number):
+        log_session(phone_number, 'ongoing_session_detected')
         send_ongoing_session_message(phone_number)
         return
     
     # Handle start commands
     if text in ['hi', 'hello', 'start', 'kupiga kura', 'anza']:
+        log_session(phone_number, 'start_new_session')
         send_welcome_message(phone_number)
     else:
+        log_session(phone_number, 'unknown_command', text)
         send_welcome_message(phone_number)
 
 
@@ -297,14 +306,18 @@ def process_payment(phone_number, vote, quantity):
             # Generate tickets
             generate_tickets(vote)
             
+            # Log payment
+            log_payment(phone_number, vote.amount, 'completed', payment.payment_id)
+            
             # Clear session after successful payment
             clear_user_session(phone_number)
+            log_session(phone_number, 'session_cleared_after_payment')
             
             # Send confirmation message
             send_payment_confirmation(phone_number, vote)
             
     except Exception as e:
-        print(f"Error processing payment: {str(e)}")
+        log_error(f"Payment processing error: {str(e)}", phone_number, {'vote_id': vote.id, 'quantity': quantity})
         send_text_message(phone_number, "Kuna hitilafu katika malipo. Tafadhali jaribu tena.")
 
 
