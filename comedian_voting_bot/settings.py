@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-aa-e-9-l+2whjp*oby!4%&z9*iehxihs^p09hmip#n3g00%k7#
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'ngrok.io']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'levelsprotech2.pythonanywhere.com']
 
 # WhatsApp Configuration
 WHATSAPP_TOKEN = 'EAAr1kvlgqhIBPYilZAEVB0TPaIkJsYfr0awgBElibVK1WB5Y3alwZCXZAHzSXGoi6nf4AkO3CjnpqLtY6Re68pPlPg06z6hPSy4wUgKazIpVSvsPDV9PrpGec9tZAK6iUp60lNxxrwoDNBJykbyxphUZC7pQ9rqEOBgZAOgf0rH6skqnoXC1TCCbHPLtyckdZCSFwu9KA5D9A3KiIuvhX5ZCJxwhx8zaA02b8tW2hiV8jJD2yQZDZD'
