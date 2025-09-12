@@ -160,16 +160,45 @@ def handle_button_click(phone_number, button_id):
 
 def handle_list_selection(phone_number, list_id):
     """Handle list selections"""
+    log_message(phone_number, 'list_selection', f"Selected: {list_id}")
+    
     if list_id.startswith('comedian_'):
-        comedian_name = list_id.replace('comedian_', '').replace('_', ' ')
-        send_vote_confirmation(phone_number, comedian_name)
+        # Convert back from ID format to comedian name
+        comedian_id = list_id.replace('comedian_', '')
+        log_message(phone_number, 'comedian_selection', f"Looking for comedian with ID: {comedian_id}")
+        
+        # Find comedian by matching the ID format
+        try:
+            comedian = Comedian.objects.get(
+                name__iexact=comedian_id.replace('_', ' ')
+            )
+            log_message(phone_number, 'comedian_found', f"Found comedian: {comedian.name}")
+            send_vote_confirmation(phone_number, comedian.name)
+        except Comedian.DoesNotExist:
+            log_error(f"Comedian not found for ID: {comedian_id}", phone_number)
+            # Try alternative matching
+            comedian_name = comedian_id.replace('_', ' ').title()
+            log_message(phone_number, 'comedian_retry', f"Trying alternative name: {comedian_name}")
+            try:
+                comedian = Comedian.objects.get(name__iexact=comedian_name)
+                log_message(phone_number, 'comedian_found_alt', f"Found comedian with alternative: {comedian.name}")
+                send_vote_confirmation(phone_number, comedian.name)
+            except Comedian.DoesNotExist:
+                log_error(f"Comedian not found with alternative: {comedian_name}", phone_number)
+                send_text_message(phone_number, "Comedian huyo hajapatikana. Tafadhali chagua kutoka kwenye orodha.")
+                send_comedians_list(phone_number)
     elif list_id.startswith('quantity_'):
         quantity = int(list_id.replace('quantity_', ''))
+        log_message(phone_number, 'quantity_selection', f"Selected quantity: {quantity}")
         # Get the last vote for this phone number
         last_vote = Vote.objects.filter(phone_number=phone_number).order_by('-created_at').first()
         if last_vote:
             process_payment(phone_number, last_vote, quantity)
+        else:
+            log_error("No vote found for quantity selection", phone_number)
+            send_welcome_message(phone_number)
     else:
+        log_message(phone_number, 'unknown_selection', f"Unknown selection: {list_id}")
         send_welcome_message(phone_number)
 
 
@@ -253,22 +282,22 @@ def send_vote_confirmation(phone_number, comedian_name):
             "rows": [
                 {
                     "id": "quantity_1",
-                    "title": "Kura 1 na Tiket 1 ya Kushinda (TZS 1000)",
-                    "description": "Kura moja tu"
+                    "title": "Kura 1 (TZS 1000)",
+                    "description": "Kura moja na tiket 1"
                 },
                 {
                     "id": "quantity_3",
-                    "title": "Kura 3 na Tiketi 3 za Kushinda (TZS 3000)",
-                    "description": "Kura tatu"
+                    "title": "Kura 3 (TZS 3000)",
+                    "description": "Kura tatu na tiketi 3"
                 },
                 {
                     "id": "quantity_5",
-                    "title": "Kura 5 na Tickets 6 za kushinda (TZS 5000)",
-                    "description": "Kura tano"
+                    "title": "Kura 5 (TZS 5000)",
+                    "description": "Kura tano na tiketi 6"
                 },
                 {
                     "id": "quantity_12",
-                    "title": "Kura 12 na Tiket 12 za Kushinda (TZS 10000)",
+                    "title": "Kura 12 (TZS 10000)",
                     "description": "Kura kumi na mbili"
                 }
             ]
