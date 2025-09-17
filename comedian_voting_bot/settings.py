@@ -37,7 +37,6 @@ WHATSAPP_VERIFY_TOKEN = 'c2a49926-a81c-11ef-b864-0242ac120002'
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
