@@ -194,10 +194,11 @@ def handle_text_message(phone_number, text):
         # Send welcome message
         send_welcome_message(phone_number, is_new_user)
         
-        # If new user, send welcome videos
+        # Send welcome videos to ALL users (new and returning)
+        send_welcome_videos(phone_number)
+        
+        # If new user, mark as no longer first-time
         if is_new_user:
-            send_welcome_videos(phone_number)
-            # Mark user as no longer first-time
             user.is_first_time = False
             user.save()
             log_message(phone_number, 'user_marked_returning', "User marked as returning user")
@@ -284,8 +285,10 @@ Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura come
 
 Andika # ili ufute session yoyote inaendelea."""
     else:
-        header = "Comedian Bora wa Mwezi"
-        body = """Karibu tena! Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
+        header = "Karibu Tena! Comedian Bora wa Mwezi"
+        body = """Karibu tena! Utapata videos maalum za kukaribisha! 📹
+
+Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
 
 Andika # ili ufute session yoyote inaendelea."""
     
