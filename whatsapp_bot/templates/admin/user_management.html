@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management - WhatsApp Bot Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 2rem;
+        }
+        
+        .back-btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .search-bar {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .search-form {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+        
+        .search-btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .users-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .table-header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            font-weight: bold;
+        }
+        
+        .user-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 20px;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            align-items: center;
+        }
+        
+        .user-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .user-item:last-child {
+            border-bottom: none;
+        }
+        
+        .user-phone {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .user-status {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .status-new {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .status-returning {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+        
+        .user-date {
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .last-interaction {
+            color: #999;
+            font-size: 0.8rem;
+        }
+        
+        .delete-btn {
+            background: #ff4757;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+        
+        .delete-btn:hover {
+            background: #ff3742;
+        }
+        
+        .no-users {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        
+        .pagination a {
+            background: white;
+            color: #667eea;
+            padding: 10px 15px;
+            margin: 0 5px;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .pagination a:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👥 User Management</h1>
+            <a href="{% url 'admin_dashboard' %}" class="back-btn">← Back to Dashboard</a>
+        </div>
+        
+        <div class="search-bar">
+            <form method="GET" class="search-form">
+                <input type="text" name="search" class="search-input" placeholder="Search by phone number..." value="{{ search }}">
+                <button type="submit" class="search-btn">Search</button>
+            </form>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_users }}</div>
+                <div class="stat-label">Total Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ new_users }}</div>
+                <div class="stat-label">New Users</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ returning_users }}</div>
+                <div class="stat-label">Returning Users</div>
+            </div>
+        </div>
+        
+        <div class="users-table">
+            <div class="table-header">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 20px;">
+                    <div>Phone Number</div>
+                    <div>Status</div>
+                    <div>Joined</div>
+                    <div>Last Active</div>
+                    <div>Actions</div>
+                </div>
+            </div>
+            
+            {% for user in users %}
+            <div class="user-item">
+                <div class="user-phone">{{ user.phone_number }}</div>
+                <div class="user-status {% if user.is_first_time %}status-new{% else %}status-returning{% endif %}">
+                    {% if user.is_first_time %}New User{% else %}Returning User{% endif %}
+                </div>
+                <div class="user-date">{{ user.created_at|date:"M d, Y" }}</div>
+                <div class="last-interaction">{{ user.last_interaction|date:"M d, Y H:i" }}</div>
+                <button class="delete-btn" onclick="deleteUser({{ user.id }}, '{{ user.phone_number }}')">Delete</button>
+            </div>
+            {% empty %}
+            <div class="no-users">
+                <h3>No users found</h3>
+                <p>Users will appear here when they start using the bot</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <script>
+        function deleteUser(userId, phoneNumber) {
+            if (confirm(`Are you sure you want to delete user ${phoneNumber}?`)) {
+                fetch(`/admin/delete-user/${userId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                });
+            }
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

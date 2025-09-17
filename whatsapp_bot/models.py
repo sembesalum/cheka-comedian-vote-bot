@@ -5,6 +5,35 @@ import random
 import string
 
 
+class User(models.Model):
+    """Model to track users and their first-time status"""
+    phone_number = models.CharField(max_length=20, unique=True)
+    is_first_time = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_interaction = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.phone_number} ({'New' if self.is_first_time else 'Returning'})"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+class WelcomeVideo(models.Model):
+    """Model to store welcome videos for new users"""
+    title = models.CharField(max_length=100)
+    video_url = models.URLField()
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.title} (Order: {self.order})"
+    
+    class Meta:
+        ordering = ['order']
+
+
 class Comedian(models.Model):
     name = models.CharField(max_length=100, unique=True)
     is_active = models.BooleanField(default=True)

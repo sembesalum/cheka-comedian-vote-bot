@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from .models import Comedian, VotingSession, Vote, Ticket, Payment
+from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, WelcomeVideo
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
@@ -29,6 +29,55 @@ def whatsapp_api_call(payload):
     except requests.exceptions.RequestException as e:
         log_error(f"WhatsApp API Error: {str(e)}", extra_data={'payload': payload})
         return None
+
+
+def get_or_create_user(phone_number):
+    """Get or create user and return user object and is_new flag"""
+    try:
+        user = User.objects.get(phone_number=phone_number)
+        log_message(phone_number, 'user_found', f"Returning user: {user.phone_number}")
+        return user, False
+    except User.DoesNotExist:
+        user = User.objects.create(phone_number=phone_number)
+        log_message(phone_number, 'user_created', f"New user created: {user.phone_number}")
+        return user, True
+
+
+def send_video_message(phone_number, video_url, caption=""):
+    """Send video message via WhatsApp"""
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone_number,
+        "type": "video",
+        "video": {
+            "link": video_url,
+            "caption": caption
+        }
+    }
+    
+    result = whatsapp_api_call(payload)
+    if result:
+        log_message(phone_number, 'video_sent', f"Video sent: {video_url}")
+    return result
+
+
+def send_welcome_videos(phone_number):
+    """Send welcome videos to new users"""
+    videos = WelcomeVideo.objects.filter(is_active=True).order_by('order')
+    
+    if not videos.exists():
+        log_message(phone_number, 'no_videos', "No welcome videos found")
+        return
+    
+    log_message(phone_number, 'sending_videos', f"Sending {videos.count()} welcome videos")
+    
+    for i, video in enumerate(videos, 1):
+        caption = f"Video {i}: {video.title}" if video.title else f"Video {i}"
+        send_video_message(phone_number, video.video_url, caption)
+        
+        # Small delay between videos to avoid rate limiting
+        import time
+        time.sleep(1)
 
 
 def send_text_message(phone_number, message):
@@ -120,28 +169,41 @@ def process_message(data):
 def handle_text_message(phone_number, text):
     """Handle text messages"""
     log_message(phone_number, 'text', text)
-    
+
+    # Get or create user
+    user, is_new_user = get_or_create_user(phone_number)
+
     # Check for clear session command
     if text == '#':
         log_session(phone_number, 'clear_session')
         clear_user_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
-        send_welcome_message(phone_number)
+        send_welcome_message(phone_number, is_new_user)
         return
-    
+
     # Check if user has an ongoing session
     if has_ongoing_session(phone_number):
         log_session(phone_number, 'ongoing_session_detected')
         send_ongoing_session_message(phone_number)
         return
-    
+
     # Handle start commands
     if text in ['hi', 'hello', 'start', 'kupiga kura', 'anza']:
         log_session(phone_number, 'start_new_session')
-        send_welcome_message(phone_number)
+        
+        # Send welcome message
+        send_welcome_message(phone_number, is_new_user)
+        
+        # If new user, send welcome videos
+        if is_new_user:
+            send_welcome_videos(phone_number)
+            # Mark user as no longer first-time
+            user.is_first_time = False
+            user.save()
+            log_message(phone_number, 'user_marked_returning', "User marked as returning user")
     else:
         log_session(phone_number, 'unknown_command', text)
-        send_welcome_message(phone_number)
+        send_welcome_message(phone_number, is_new_user)
 
 
 def handle_button_click(phone_number, button_id):
@@ -149,13 +211,19 @@ def handle_button_click(phone_number, button_id):
     if button_id == 'start_voting':
         send_comedians_list(phone_number)
     elif button_id == 'play_again':
-        send_welcome_message(phone_number)
+        # Get user status for welcome message
+        user, is_new_user = get_or_create_user(phone_number)
+        send_welcome_message(phone_number, is_new_user)
     elif button_id == 'clear_session':
         clear_user_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
-        send_welcome_message(phone_number)
+        # Get user status for welcome message
+        user, is_new_user = get_or_create_user(phone_number)
+        send_welcome_message(phone_number, is_new_user)
     else:
-        send_welcome_message(phone_number)
+        # Get user status for welcome message
+        user, is_new_user = get_or_create_user(phone_number)
+        send_welcome_message(phone_number, is_new_user)
 
 
 def handle_list_selection(phone_number, list_id):
@@ -196,18 +264,31 @@ def handle_list_selection(phone_number, list_id):
             process_payment(phone_number, last_vote, quantity)
         else:
             log_error("No vote found for quantity selection", phone_number)
-            send_welcome_message(phone_number)
+            user, is_new_user = get_or_create_user(phone_number)
+            send_welcome_message(phone_number, is_new_user)
     else:
         log_message(phone_number, 'unknown_selection', f"Unknown selection: {list_id}")
-        send_welcome_message(phone_number)
+        user, is_new_user = get_or_create_user(phone_number)
+        send_welcome_message(phone_number, is_new_user)
 
 
-def send_welcome_message(phone_number):
+def send_welcome_message(phone_number, is_new_user=False):
     """Send welcome message with voting button"""
-    header = "Comedian Bora wa Mwezi"
-    body = """Karibu kuchagua comedian bora wa mwezi, Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
+    if is_new_user:
+        header = "Karibu! Comedian Bora wa Mwezi"
+        body = """Karibu kuchagua comedian bora wa mwezi! 🎉
+
+Kama mtumiaji mpya, utapata videos maalum za kukaribisha! 📹
+
+Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
 
 Andika # ili ufute session yoyote inaendelea."""
+    else:
+        header = "Comedian Bora wa Mwezi"
+        body = """Karibu tena! Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
+
+Andika # ili ufute session yoyote inaendelea."""
+    
     footer = "Chagua chini ili uanze"
     
     buttons = [

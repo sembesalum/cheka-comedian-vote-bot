@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Management - WhatsApp Bot Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 2rem;
+        }
+        
+        .back-btn {
+            background: white;
+            color: #667eea;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+        
+        .add-video-section {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .add-video-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr auto;
+            gap: 15px;
+            align-items: end;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: bold;
+        }
+        
+        .form-input {
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .add-btn {
+            background: #667eea;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s ease;
+        }
+        
+        .add-btn:hover {
+            background: #5a6fd8;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .videos-table {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .table-header {
+            background: #667eea;
+            color: white;
+            padding: 20px;
+            font-weight: bold;
+        }
+        
+        .video-item {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr 1fr auto auto;
+            gap: 20px;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+            align-items: center;
+        }
+        
+        .video-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .video-item:last-child {
+            border-bottom: none;
+        }
+        
+        .video-title {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .video-url {
+            color: #667eea;
+            text-decoration: none;
+            word-break: break-all;
+        }
+        
+        .video-url:hover {
+            text-decoration: underline;
+        }
+        
+        .video-order {
+            text-align: center;
+            font-weight: bold;
+            color: #666;
+        }
+        
+        .video-status {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-align: center;
+        }
+        
+        .status-active {
+            background: #e8f5e8;
+            color: #388e3c;
+        }
+        
+        .status-inactive {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .video-date {
+            color: #999;
+            font-size: 0.9rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .edit-btn, .delete-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+        
+        .edit-btn {
+            background: #ffa726;
+            color: white;
+        }
+        
+        .edit-btn:hover {
+            background: #ff9800;
+        }
+        
+        .delete-btn {
+            background: #ff4757;
+            color: white;
+        }
+        
+        .delete-btn:hover {
+            background: #ff3742;
+        }
+        
+        .no-videos {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .close:hover {
+            color: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Video Management</h1>
+            <a href="{% url 'admin_dashboard' %}" class="back-btn">← Back to Dashboard</a>
+        </div>
+        
+        <div class="add-video-section">
+            <h3>Add New Welcome Video</h3>
+            <form id="addVideoForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="title">Title</label>
+                        <input type="text" id="title" name="title" class="form-input" placeholder="Video title" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="video_url">Video URL</label>
+                        <input type="url" id="video_url" name="video_url" class="form-input" placeholder="https://example.com/video.mp4" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="order">Order</label>
+                        <input type="number" id="order" name="order" class="form-input" placeholder="0" min="0">
+                    </div>
+                    <button type="submit" class="add-btn">Add Video</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ total_videos }}</div>
+                <div class="stat-label">Total Videos</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ active_videos }}</div>
+                <div class="stat-label">Active Videos</div>
+            </div>
+        </div>
+        
+        <div class="videos-table">
+            <div class="table-header">
+                <div style="display: grid; grid-template-columns: 1fr 2fr 1fr 1fr auto auto; gap: 20px;">
+                    <div>Title</div>
+                    <div>Video URL</div>
+                    <div>Order</div>
+                    <div>Status</div>
+                    <div>Added</div>
+                    <div>Actions</div>
+                </div>
+            </div>
+            
+            {% for video in videos %}
+            <div class="video-item">
+                <div class="video-title">{{ video.title }}</div>
+                <div><a href="{{ video.video_url }}" target="_blank" class="video-url">{{ video.video_url|truncatechars:50 }}</a></div>
+                <div class="video-order">{{ video.order }}</div>
+                <div class="video-status {% if video.is_active %}status-active{% else %}status-inactive{% endif %}">
+                    {% if video.is_active %}Active{% else %}Inactive{% endif %}
+                </div>
+                <div class="video-date">{{ video.created_at|date:"M d, Y" }}</div>
+                <div class="action-buttons">
+                    <button class="edit-btn" onclick="editVideo({{ video.id }}, '{{ video.title }}', '{{ video.video_url }}', {{ video.order }}, {{ video.is_active|yesno:"true,false" }})">Edit</button>
+                    <button class="delete-btn" onclick="deleteVideo({{ video.id }}, '{{ video.title }}')">Delete</button>
+                </div>
+            </div>
+            {% empty %}
+            <div class="no-videos">
+                <h3>No videos found</h3>
+                <p>Add your first welcome video above</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Edit Video Modal -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Edit Video</h3>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <form id="editVideoForm">
+                <input type="hidden" id="edit_video_id">
+                <div class="form-group">
+                    <label for="edit_title">Title</label>
+                    <input type="text" id="edit_title" name="title" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_video_url">Video URL</label>
+                    <input type="url" id="edit_video_url" name="video_url" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_order">Order</label>
+                    <input type="number" id="edit_order" name="order" class="form-input" min="0">
+                </div>
+                <div class="form-group">
+                    <label for="edit_is_active">Status</label>
+                    <select id="edit_is_active" name="is_active" class="form-input">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive</option>
+                    </select>
+                </div>
+                <button type="submit" class="add-btn">Update Video</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // Add video form
+        document.getElementById('addVideoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = {
+                title: formData.get('title'),
+                video_url: formData.get('video_url'),
+                order: parseInt(formData.get('order')) || 0
+            };
+            
+            fetch('/admin/add-video/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        });
+        
+        // Edit video
+        function editVideo(id, title, video_url, order, is_active) {
+            document.getElementById('edit_video_id').value = id;
+            document.getElementById('edit_title').value = title;
+            document.getElementById('edit_video_url').value = video_url;
+            document.getElementById('edit_order').value = order;
+            document.getElementById('edit_is_active').value = is_active.toString();
+            document.getElementById('editModal').style.display = 'block';
+        }
+        
+        // Update video form
+        document.getElementById('editVideoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const videoId = document.getElementById('edit_video_id').value;
+            const data = {
+                title: document.getElementById('edit_title').value,
+                video_url: document.getElementById('edit_video_url').value,
+                order: parseInt(document.getElementById('edit_order').value) || 0,
+                is_active: document.getElementById('edit_is_active').value === 'true'
+            };
+            
+            fetch(`/admin/update-video/${videoId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+            });
+        });
+        
+        // Delete video
+        function deleteVideo(videoId, title) {
+            if (confirm(`Are you sure you want to delete video "${title}"?`)) {
+                fetch(`/admin/delete-video/${videoId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error: ' + error);
+                });
+            }
+        }
+        
+        // Close modal
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('editModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+        
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

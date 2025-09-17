@@ -1,0 +1,168 @@
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.utils import timezone
+from .models import User, WelcomeVideo
+import json
+
+
+def user_management(request):
+    """User management interface"""
+    users = User.objects.all().order_by('-created_at')
+    
+    # Search functionality
+    search = request.GET.get('search', '')
+    if search:
+        users = users.filter(phone_number__icontains=search)
+    
+    context = {
+        'users': users,
+        'search': search,
+        'total_users': User.objects.count(),
+        'new_users': User.objects.filter(is_first_time=True).count(),
+        'returning_users': User.objects.filter(is_first_time=False).count(),
+    }
+    
+    return render(request, 'admin/user_management.html', context)
+
+
+def video_management(request):
+    """Video management interface"""
+    videos = WelcomeVideo.objects.all().order_by('order')
+    
+    context = {
+        'videos': videos,
+        'total_videos': videos.count(),
+        'active_videos': videos.filter(is_active=True).count(),
+    }
+    
+    return render(request, 'admin/video_management.html', context)
+
+
+@csrf_exempt
+def delete_user(request, user_id):
+    """Delete user via AJAX"""
+    if request.method == 'POST':
+        try:
+            user = get_object_or_404(User, id=user_id)
+            phone_number = user.phone_number
+            user.delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'User {phone_number} deleted successfully'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error deleting user: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def add_video(request):
+    """Add new welcome video"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            title = data.get('title', '')
+            video_url = data.get('video_url', '')
+            order = data.get('order', 0)
+            
+            if not title or not video_url:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Title and video URL are required'
+                })
+            
+            video = WelcomeVideo.objects.create(
+                title=title,
+                video_url=video_url,
+                order=order
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Video added successfully',
+                'video': {
+                    'id': video.id,
+                    'title': video.title,
+                    'video_url': video.video_url,
+                    'order': video.order,
+                    'is_active': video.is_active
+                }
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error adding video: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def update_video(request, video_id):
+    """Update video"""
+    if request.method == 'POST':
+        try:
+            video = get_object_or_404(WelcomeVideo, id=video_id)
+            data = json.loads(request.body)
+            
+            video.title = data.get('title', video.title)
+            video.video_url = data.get('video_url', video.video_url)
+            video.order = data.get('order', video.order)
+            video.is_active = data.get('is_active', video.is_active)
+            video.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Video updated successfully'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating video: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def delete_video(request, video_id):
+    """Delete video"""
+    if request.method == 'POST':
+        try:
+            video = get_object_or_404(WelcomeVideo, id=video_id)
+            title = video.title
+            video.delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Video "{title}" deleted successfully'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error deleting video: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+def dashboard(request):
+    """Admin dashboard"""
+    context = {
+        'total_users': User.objects.count(),
+        'new_users_today': User.objects.filter(
+            created_at__date=timezone.now().date()
+        ).count(),
+        'total_videos': WelcomeVideo.objects.count(),
+        'active_videos': WelcomeVideo.objects.filter(is_active=True).count(),
+        'recent_users': User.objects.all()[:10],
+    }
+    
+    return render(request, 'admin/dashboard.html', context)
