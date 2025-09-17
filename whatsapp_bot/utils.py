@@ -188,7 +188,7 @@ def handle_text_message(phone_number, text):
         return
 
     # Handle start commands
-    if text in ['hi', 'hello', 'start', 'kupiga kura', 'anza']:
+    if text.lower() in ['hi', 'hello', 'hey', 'start', 'kupiga kura', 'anza']:
         log_session(phone_number, 'start_new_session')
         
         # Send welcome message
