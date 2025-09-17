@@ -3,7 +3,10 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
+from django.core.cache import cache
 from .models import User, WelcomeVideo
+from .session_functions import clear_user_session
+from .logger import log_session
 import json
 
 
@@ -47,11 +50,17 @@ def delete_user(request, user_id):
         try:
             user = get_object_or_404(User, id=user_id)
             phone_number = user.phone_number
+            
+            # Clear user's session before deleting
+            clear_user_session(phone_number)
+            log_session(phone_number, 'user_deleted', f'User {phone_number} deleted from admin dashboard')
+            
+            # Delete the user
             user.delete()
             
             return JsonResponse({
                 'success': True,
-                'message': f'User {phone_number} deleted successfully'
+                'message': f'User {phone_number} deleted successfully (session cleared)'
             })
         except Exception as e:
             return JsonResponse({
