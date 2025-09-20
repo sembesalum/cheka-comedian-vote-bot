@@ -43,41 +43,32 @@ def get_or_create_user(phone_number):
         return user, True
 
 
-def send_video_message(phone_number, video_url, caption=""):
-    """Send video message via WhatsApp"""
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone_number,
-        "type": "video",
-        "video": {
-            "link": video_url,
-            "caption": caption
-        }
-    }
-    
-    result = whatsapp_api_call(payload)
+def send_youtube_video(phone_number, youtube_url, caption=""):
+    """Send YouTube video link as text message for embedded playback"""
+    message = f"📹 {caption}\n\n{youtube_url}"
+    result = send_text_message(phone_number, message)
     if result:
-        log_message(phone_number, 'video_sent', f"Video sent: {video_url}")
+        log_message(phone_number, 'youtube_sent', f"YouTube video sent: {youtube_url}")
     return result
 
 
 def send_welcome_videos(phone_number):
-    """Send welcome videos to new users"""
+    """Send welcome YouTube videos to all users"""
     videos = WelcomeVideo.objects.filter(is_active=True).order_by('order')
     
     if not videos.exists():
         log_message(phone_number, 'no_videos', "No welcome videos found")
         return
     
-    log_message(phone_number, 'sending_videos', f"Sending {videos.count()} welcome videos")
+    log_message(phone_number, 'sending_videos', f"Sending {videos.count()} welcome YouTube videos")
     
     for i, video in enumerate(videos, 1):
         caption = f"Video {i}: {video.title}" if video.title else f"Video {i}"
-        send_video_message(phone_number, video.video_url, caption)
+        send_youtube_video(phone_number, video.video_url, caption)
         
         # Small delay between videos to avoid rate limiting
         import time
-        time.sleep(1)
+        time.sleep(2)
 
 
 def send_text_message(phone_number, message):
@@ -178,7 +169,9 @@ def handle_text_message(phone_number, text):
         log_session(phone_number, 'clear_session')
         clear_user_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
+        # Always send welcome message and videos when clearing session
         send_welcome_message(phone_number, is_new_user)
+        send_welcome_videos(phone_number)
         return
 
     # Check if user has an ongoing session
@@ -187,8 +180,8 @@ def handle_text_message(phone_number, text):
         send_ongoing_session_message(phone_number)
         return
 
-    # Handle start commands
-    if text.lower() in ['hi', 'hello', 'hey', 'start', 'kupiga kura', 'anza']:
+    # Handle start commands and ANY text message
+    if text.lower() in ['hi', 'hello', 'hey', 'start', 'kupiga kura', 'anza'] or True:  # Always send welcome
         log_session(phone_number, 'start_new_session')
         
         # Send welcome message
@@ -202,9 +195,6 @@ def handle_text_message(phone_number, text):
             user.is_first_time = False
             user.save()
             log_message(phone_number, 'user_marked_returning', "User marked as returning user")
-    else:
-        log_session(phone_number, 'unknown_command', text)
-        send_welcome_message(phone_number, is_new_user)
 
 
 def handle_button_click(phone_number, button_id):
@@ -215,16 +205,19 @@ def handle_button_click(phone_number, button_id):
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
+        send_welcome_videos(phone_number)  # Always send videos
     elif button_id == 'clear_session':
         clear_user_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
+        send_welcome_videos(phone_number)  # Always send videos
     else:
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
+        send_welcome_videos(phone_number)  # Always send videos
 
 
 def handle_list_selection(phone_number, list_id):
