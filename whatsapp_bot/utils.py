@@ -168,6 +168,8 @@ def handle_text_message(phone_number, text):
     if text == '#':
         log_session(phone_number, 'clear_session')
         clear_user_session(phone_number)
+        # Also clear any ongoing payment sessions
+        clear_payment_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
         # Always send welcome message and videos when clearing session
         send_welcome_message(phone_number, is_new_user)
@@ -198,6 +200,10 @@ def handle_text_message(phone_number, text):
     if text.lower() in ['hi', 'hello', 'hey', 'start', 'kupiga kura', 'anza'] or True:  # Always send welcome
         log_session(phone_number, 'start_new_session')
         
+        # Clear any existing sessions when starting new
+        clear_user_session(phone_number)
+        clear_payment_session(phone_number)
+        
         # Send welcome message
         send_welcome_message(phone_number, is_new_user)
         
@@ -222,6 +228,7 @@ def handle_button_click(phone_number, button_id):
         send_welcome_videos(phone_number)  # Always send videos
     elif button_id == 'clear_session':
         clear_user_session(phone_number)
+        clear_payment_session(phone_number)  # Also clear payment sessions
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
@@ -313,6 +320,13 @@ Andika # ili ufute session yoyote inaendelea."""
             "reply": {
                 "id": "start_voting",
                 "title": "Bonyeza Kupiga Kura"
+            }
+        },
+        {
+            "type": "reply",
+            "reply": {
+                "id": "clear_session",
+                "title": "Futa Session"
             }
         }
     ]
@@ -505,7 +519,7 @@ def initiate_payment_process(phone_number, payment, payment_phone):
             payment.save()
             
             # Send payment prompt message
-            send_text_message(phone_number, f"✅ Malipo yameanzishwa!\n\nNambari ya malipo: {payment_result['transaction_id']}\n\nTafadhali angalia simu yako na fanya malipo. Utapata ujumbe wa uthibitisho baada ya malipo.")
+            send_text_message(phone_number, f"✅ Malipo yameanzishwa!\n\nNambari ya malipo: {payment_result['transaction_id']}\n\nTafadhali angalia simu yako na fanya malipo.\n\nUtapata ujumbe wa uthibitisho baada ya dakika 1 (60 sekunde).")
             
             # Set up payment status checking
             check_payment_status_after_delay(phone_number, payment)
@@ -525,14 +539,42 @@ def initiate_payment_process(phone_number, payment, payment_phone):
         clear_user_session(phone_number)
 
 
+def clear_payment_session(phone_number):
+    """Clear any ongoing payment sessions for a user"""
+    try:
+        # Find any pending payments for this user
+        pending_payments = Payment.objects.filter(
+            vote__phone_number=phone_number,
+            status__in=['pending', 'initiated']
+        )
+        
+        for payment in pending_payments:
+            payment.status = 'cancelled'
+            payment.save()
+            log_payment(phone_number, payment.amount, 'cancelled_by_user', payment.gateway_transaction_id)
+        
+        log_message(phone_number, 'payment_session_cleared', f"Cleared {pending_payments.count()} pending payments")
+        
+    except Exception as e:
+        log_error(f"Error clearing payment session: {str(e)}", phone_number)
+
+
 def check_payment_status_after_delay(phone_number, payment):
     """Check payment status after a delay"""
     import threading
     import time
     
     def check_status():
-        # Wait 30 seconds before first check
-        time.sleep(30)
+        # Wait 60 seconds before first check
+        time.sleep(60)
+        
+        # Check if payment still exists and is not cancelled
+        try:
+            payment.refresh_from_db()
+            if payment.status in ['cancelled', 'paid', 'failed', 'expired']:
+                return  # Payment already processed
+        except Payment.DoesNotExist:
+            return  # Payment no longer exists
         
         # Check payment status
         status_result = check_payment_status(
@@ -554,6 +596,7 @@ def check_payment_status_after_delay(phone_number, payment):
                 # Send success message
                 send_payment_confirmation(phone_number, payment.vote)
                 clear_user_session(phone_number)
+                log_payment(phone_number, payment.amount, 'completed', payment.gateway_transaction_id)
                 
             elif status_result['status'] in ['failed', 'cancelled', 'expired']:
                 # Payment failed
@@ -562,13 +605,14 @@ def check_payment_status_after_delay(phone_number, payment):
                 
                 send_text_message(phone_number, f"❌ Malipo yamekataliwa au yameisha muda.\n\nHali: {status_result['status']}\n\nTafadhali jaribu tena.")
                 clear_user_session(phone_number)
+                log_payment(phone_number, payment.amount, f'failed_{status_result["status"]}', payment.gateway_transaction_id)
                 
             else:
                 # Still pending, check again in 60 seconds
                 time.sleep(60)
                 check_payment_status_after_delay(phone_number, payment)
         else:
-            # Status check failed, try again
+            # Status check failed, try again in 60 seconds
             time.sleep(60)
             check_payment_status_after_delay(phone_number, payment)
     
