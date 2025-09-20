@@ -7,6 +7,7 @@ from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Welcom
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
+from .payment_functions import initiate_payment, check_payment_status
 
 
 def whatsapp_api_call(payload):
@@ -43,9 +44,9 @@ def get_or_create_user(phone_number):
         return user, True
 
 
-def send_youtube_video(phone_number, youtube_url, caption=""):
+def send_youtube_video(phone_number, youtube_url):
     """Send YouTube video link as text message for embedded playback"""
-    message = f"📹 {caption}\n\n{youtube_url}"
+    message = youtube_url  # Send only the URL without any title or emoji
     result = send_text_message(phone_number, message)
     if result:
         log_message(phone_number, 'youtube_sent', f"YouTube video sent: {youtube_url}")
@@ -62,9 +63,8 @@ def send_welcome_videos(phone_number):
     
     log_message(phone_number, 'sending_videos', f"Sending {videos.count()} welcome YouTube videos")
     
-    for i, video in enumerate(videos, 1):
-        caption = f"Video {i}: {video.title}" if video.title else f"Video {i}"
-        send_youtube_video(phone_number, video.video_url, caption)
+    for video in videos:
+        send_youtube_video(phone_number, video.video_url)  # Send without any caption
         
         # Small delay between videos to avoid rate limiting
         import time
@@ -176,6 +176,20 @@ def handle_text_message(phone_number, text):
 
     # Check if user has an ongoing session
     if has_ongoing_session(phone_number):
+        session_data = get_user_session(phone_number)
+        
+        # Check if waiting for payment phone number
+        if session_data and session_data.get('step') == 'waiting_for_payment_phone':
+            log_message(phone_number, 'payment_phone_input', f"Received payment phone: {text}")
+            handle_payment_phone_input(phone_number, text)
+            return
+        
+        # Check if processing payment
+        elif session_data and session_data.get('step') == 'processing_payment':
+            send_text_message(phone_number, "Malipo yako yanaendelea. Tafadhali subiri kidogo...")
+            return
+        
+        # Other ongoing session
         log_session(phone_number, 'ongoing_session_detected')
         send_ongoing_session_message(phone_number)
         return
@@ -255,7 +269,13 @@ def handle_list_selection(phone_number, list_id):
         # Get the last vote for this phone number
         last_vote = Vote.objects.filter(phone_number=phone_number).order_by('-created_at').first()
         if last_vote:
-            process_payment(phone_number, last_vote, quantity)
+            # Update vote with selected quantity
+            last_vote.quantity = quantity
+            last_vote.amount = quantity * 1000  # TZS 1000 per vote
+            last_vote.save()
+            
+            # Ask for payment phone number
+            ask_for_payment_phone(phone_number, last_vote)
         else:
             log_error("No vote found for quantity selection", phone_number)
             user, is_new_user = get_or_create_user(phone_number)
@@ -387,44 +407,6 @@ def send_vote_confirmation(phone_number, comedian_name):
         send_comedians_list(phone_number)
 
 
-def process_payment(phone_number, vote, quantity):
-    """Process payment and generate tickets"""
-    try:
-        with transaction.atomic():
-            # Update vote with selected quantity
-            vote.quantity = quantity
-            vote.amount = quantity * 1000  # TZS 1000 per vote
-            vote.save()
-            
-            # Create payment record
-            payment = Payment.objects.create(
-                vote=vote,
-                amount=vote.amount,
-                status='completed',  # Dummy payment - always successful
-                payment_method='dummy',
-                transaction_reference=f'DUMMY_{vote.id}_{int(timezone.now().timestamp())}'
-            )
-            
-            # Mark vote as paid
-            vote.is_paid = True
-            vote.save()
-            
-            # Generate tickets
-            generate_tickets(vote)
-            
-            # Log payment
-            log_payment(phone_number, vote.amount, 'completed', payment.payment_id)
-            
-            # Clear session after successful payment
-            clear_user_session(phone_number)
-            log_session(phone_number, 'session_cleared_after_payment')
-            
-            # Send confirmation message
-            send_payment_confirmation(phone_number, vote)
-            
-    except Exception as e:
-        log_error(f"Payment processing error: {str(e)}", phone_number, {'vote_id': vote.id, 'quantity': quantity})
-        send_text_message(phone_number, "Kuna hitilafu katika malipo. Tafadhali jaribu tena.")
 
 
 def generate_tickets(vote):
@@ -436,6 +418,164 @@ def generate_tickets(vote):
     
     for _ in range(ticket_count):
         Ticket.objects.create(vote=vote)
+
+
+def ask_for_payment_phone(phone_number, vote):
+    """Ask user for payment phone number"""
+    header = f"Malipo ya {vote.quantity} Kura"
+    body = f"""Umempigia kura {vote.comedian.name} - {vote.quantity} kura (TZS {vote.amount:,})
+
+Tafadhali andika nambari ya simu yako ya malipo:
+Mfano: 255123456789
+
+Nambari hii itatumika kwa malipo ya mobile money."""
+    footer = "Andika nambari ya simu"
+    
+    # Set session to wait for phone number
+    set_user_session(phone_number, {
+        'comedian_id': vote.comedian.id,
+        'vote_id': vote.id,
+        'step': 'waiting_for_payment_phone'
+    })
+    
+    send_text_message(phone_number, f"{header}\n\n{body}\n\n{footer}")
+
+
+def handle_payment_phone_input(phone_number, payment_phone):
+    """Handle payment phone number input"""
+    # Validate phone number format
+    if not payment_phone.isdigit() or len(payment_phone) < 10:
+        send_text_message(phone_number, "Nambari ya simu si sahihi. Tafadhali andika nambari sahihi.\n\nMfano: 255123456789")
+        return
+    
+    # Get the vote from session
+    session_data = get_user_session(phone_number)
+    if not session_data or 'vote_id' not in session_data:
+        send_text_message(phone_number, "Kuna hitilafu. Tafadhali anza upya.")
+        clear_user_session(phone_number)
+        return
+    
+    try:
+        vote = Vote.objects.get(id=session_data['vote_id'])
+        
+        # Create payment record
+        payment = Payment.objects.create(
+            vote=vote,
+            amount=vote.amount,
+            status='pending',
+            payment_method='mobile_money',
+            payment_phone_number=payment_phone
+        )
+        
+        # Update session
+        set_user_session(phone_number, {
+            'comedian_id': vote.comedian.id,
+            'vote_id': vote.id,
+            'payment_id': payment.payment_id,
+            'step': 'processing_payment'
+        })
+        
+        # Initiate payment
+        initiate_payment_process(phone_number, payment, payment_phone)
+        
+    except Vote.DoesNotExist:
+        send_text_message(phone_number, "Kuna hitilafu. Tafadhali anza upya.")
+        clear_user_session(phone_number)
+
+
+def initiate_payment_process(phone_number, payment, payment_phone):
+    """Initiate the actual payment process"""
+    try:
+        # Send payment initiation message
+        send_text_message(phone_number, f"Tunaanzisha malipo ya TZS {payment.amount:,}...\n\nTafadhali subiri kidogo...")
+        
+        # Initiate payment
+        payment_result = initiate_payment(
+            phone_number=payment_phone,
+            amount=float(payment.amount),
+            package_id=f"vote_{payment.vote.id}"
+        )
+        
+        if payment_result['success']:
+            # Update payment record
+            payment.status = 'initiated'
+            payment.gateway_transaction_id = payment_result['transaction_id']
+            payment.gateway_reference = payment_result.get('reference', '')
+            payment.gateway_response = payment_result.get('gateway_response', {})
+            payment.save()
+            
+            # Send payment prompt message
+            send_text_message(phone_number, f"✅ Malipo yameanzishwa!\n\nNambari ya malipo: {payment_result['transaction_id']}\n\nTafadhali angalia simu yako na fanya malipo. Utapata ujumbe wa uthibitisho baada ya malipo.")
+            
+            # Set up payment status checking
+            check_payment_status_after_delay(phone_number, payment)
+            
+        else:
+            # Payment initiation failed
+            payment.status = 'failed'
+            payment.gateway_response = payment_result
+            payment.save()
+            
+            send_text_message(phone_number, f"❌ Malipo hayajaweza kuanzishwa.\n\nHitilafu: {payment_result['message']}\n\nTafadhali jaribu tena baadaye.")
+            clear_user_session(phone_number)
+            
+    except Exception as e:
+        log_error(f"Payment initiation error: {str(e)}", phone_number, {'payment_id': payment.payment_id})
+        send_text_message(phone_number, "Kuna hitilafu katika malipo. Tafadhali jaribu tena baadaye.")
+        clear_user_session(phone_number)
+
+
+def check_payment_status_after_delay(phone_number, payment):
+    """Check payment status after a delay"""
+    import threading
+    import time
+    
+    def check_status():
+        # Wait 30 seconds before first check
+        time.sleep(30)
+        
+        # Check payment status
+        status_result = check_payment_status(
+            transaction_id=payment.gateway_transaction_id,
+            reference_id=payment.gateway_reference
+        )
+        
+        if status_result['success']:
+            if status_result['status'] == 'paid':
+                # Payment successful
+                payment.status = 'paid'
+                payment.vote.is_paid = True
+                payment.vote.save()
+                payment.save()
+                
+                # Generate tickets
+                generate_tickets(payment.vote)
+                
+                # Send success message
+                send_payment_confirmation(phone_number, payment.vote)
+                clear_user_session(phone_number)
+                
+            elif status_result['status'] in ['failed', 'cancelled', 'expired']:
+                # Payment failed
+                payment.status = status_result['status']
+                payment.save()
+                
+                send_text_message(phone_number, f"❌ Malipo yamekataliwa au yameisha muda.\n\nHali: {status_result['status']}\n\nTafadhali jaribu tena.")
+                clear_user_session(phone_number)
+                
+            else:
+                # Still pending, check again in 60 seconds
+                time.sleep(60)
+                check_payment_status_after_delay(phone_number, payment)
+        else:
+            # Status check failed, try again
+            time.sleep(60)
+            check_payment_status_after_delay(phone_number, payment)
+    
+    # Start the status checking in a separate thread
+    thread = threading.Thread(target=check_status)
+    thread.daemon = True
+    thread.start()
 
 
 def send_payment_confirmation(phone_number, vote):
