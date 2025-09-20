@@ -757,72 +757,82 @@ def check_payment_status_after_delay(phone_number, payment):
     import time
     
     def check_status():
-        # Wait 60 seconds before first check
-        time.sleep(60)
-        
-        # Check if payment still exists and is not cancelled
         try:
-            payment.refresh_from_db()
-            if payment.status in ['cancelled', 'paid', 'failed', 'expired']:
-                return  # Payment already processed
-        except Payment.DoesNotExist:
-            return  # Payment no longer exists
-        
-        # Check payment status
-        status_result = check_payment_status(
-            transaction_id=payment.gateway_transaction_id,
-            reference_id=payment.gateway_reference
-        )
-        
-        if status_result['success']:
-            if status_result['status'] == 'paid':
-                # Payment successful
-                payment.status = 'paid'
-                payment.vote.is_paid = True
-                payment.vote.save()
-                payment.save()
-                
-                # Generate tickets
-                generate_tickets(payment.vote)
-                
-                # Send success message
-                send_payment_confirmation(phone_number, payment.vote)
-                clear_user_session(phone_number)
-                log_payment(phone_number, payment.amount, 'completed', payment.gateway_transaction_id)
-                
-            elif status_result['status'] in ['failed', 'cancelled', 'expired']:
-                # Payment failed
-                payment.status = status_result['status']
-                payment.save()
-                
-                send_text_message(phone_number, f"❌ Malipo yamekataliwa au yameisha muda.\n\nHali: {status_result['status']}\n\nTafadhali jaribu tena.")
-                clear_user_session(phone_number)
-                log_payment(phone_number, payment.amount, f'failed_{status_result["status"]}', payment.gateway_transaction_id)
-                
-            elif status_result['status'] == 'unknown':
-                # Status unknown, check if payment is still pending after reasonable time
-                # If it's been more than 5 minutes, assume it failed
-                import time
-                time_since_initiated = time.time() - payment.created_at.timestamp()
-                if time_since_initiated > 300:  # 5 minutes
-                    payment.status = 'expired'
+            # Wait 60 seconds before first check
+            time.sleep(60)
+            
+            # Check if payment still exists and is not cancelled
+            try:
+                payment.refresh_from_db()
+                if payment.status in ['cancelled', 'paid', 'failed', 'expired']:
+                    log_message(phone_number, 'payment_already_processed', f"Payment {payment.gateway_transaction_id} already processed with status: {payment.status}")
+                    return  # Payment already processed
+            except Payment.DoesNotExist:
+                log_message(phone_number, 'payment_not_found', f"Payment {payment.gateway_transaction_id} no longer exists")
+                return  # Payment no longer exists
+            
+            # Check payment status
+            status_result = check_payment_status(
+                transaction_id=payment.gateway_transaction_id,
+                reference_id=payment.gateway_reference
+            )
+            
+            if status_result['success']:
+                if status_result['status'] == 'paid':
+                    # Payment successful
+                    payment.status = 'paid'
+                    payment.vote.is_paid = True
+                    payment.vote.save()
                     payment.save()
                     
-                    send_text_message(phone_number, f"⏰ Malipo yameisha muda.\n\nMalipo hayajakamilika ndani ya muda uliopangwa.\n\nTafadhali jaribu tena.")
+                    # Generate tickets
+                    generate_tickets(payment.vote)
+                    
+                    # Send success message
+                    send_payment_confirmation(phone_number, payment.vote)
                     clear_user_session(phone_number)
-                    log_payment(phone_number, payment.amount, 'expired_timeout', payment.gateway_transaction_id)
+                    log_payment(phone_number, payment.amount, 'completed', payment.gateway_transaction_id)
+                    
+                elif status_result['status'] in ['failed', 'cancelled', 'expired']:
+                    # Payment failed
+                    payment.status = status_result['status']
+                    payment.save()
+                    
+                    send_text_message(phone_number, f"❌ Malipo yamekataliwa au yameisha muda.\n\nHali: {status_result['status']}\n\nTafadhali jaribu tena.")
+                    clear_user_session(phone_number)
+                    log_payment(phone_number, payment.amount, f'failed_{status_result["status"]}', payment.gateway_transaction_id)
+                    
+                elif status_result['status'] == 'unknown':
+                    # Status unknown, check if payment is still pending after reasonable time
+                    # If it's been more than 5 minutes, assume it failed
+                    time_since_initiated = time.time() - payment.created_at.timestamp()
+                    if time_since_initiated > 300:  # 5 minutes
+                        payment.status = 'expired'
+                        payment.save()
+                        
+                        send_text_message(phone_number, f"⏰ Malipo yameisha muda.\n\nMalipo hayajakamilika ndani ya muda uliopangwa.\n\nTafadhali jaribu tena.")
+                        clear_user_session(phone_number)
+                        log_payment(phone_number, payment.amount, 'expired_timeout', payment.gateway_transaction_id)
+                    else:
+                        # Still within reasonable time, send status message with buttons
+                        send_payment_status_message(phone_number, payment, status_result['status'])
+                        log_message(phone_number, 'payment_status_unknown', f"Payment {payment.gateway_transaction_id} status unknown, sent interactive message")
                 else:
-                    # Still within reasonable time, check again
-                    time.sleep(60)
-                    check_payment_status_after_delay(phone_number, payment)
+                    # Still pending, send status message with buttons
+                    send_payment_status_message(phone_number, payment, status_result['status'])
+                    log_message(phone_number, 'payment_still_pending', f"Payment {payment.gateway_transaction_id} still pending, sent interactive message")
             else:
-                # Still pending, check again in 60 seconds
-                time.sleep(60)
-                check_payment_status_after_delay(phone_number, payment)
-        else:
-            # Status check failed, try again in 60 seconds
-            time.sleep(60)
-            check_payment_status_after_delay(phone_number, payment)
+                # Status check failed, send status message with buttons
+                send_payment_status_message(phone_number, payment, 'unknown')
+                log_error(f"Payment status check failed: {status_result.get('message', 'Unknown error')}", phone_number, {'payment_id': payment.gateway_transaction_id})
+                
+        except Exception as e:
+            log_error(f"Error in payment status check thread: {str(e)}", phone_number, {'payment_id': payment.gateway_transaction_id})
+            # Send status message with buttons as fallback
+            try:
+                send_payment_status_message(phone_number, payment, 'unknown')
+            except:
+                send_text_message(phone_number, "Kuna hitilafu katika kuangalia hali ya malipo. Tafadhali tumia 'status' au 'hali' kuangalia tena.")
     
     # Start the status checking in a separate thread
     thread = threading.Thread(target=check_status)
