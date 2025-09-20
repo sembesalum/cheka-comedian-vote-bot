@@ -176,6 +176,11 @@ def handle_text_message(phone_number, text):
         send_welcome_videos(phone_number)
         return
 
+    # Handle status check command (before ongoing session check)
+    if text.lower() in ['status', 'hali', 'check']:
+        check_payment_status_manual(phone_number)
+        return
+
     # Check if user has an ongoing session
     if has_ongoing_session(phone_number):
         session_data = get_user_session(phone_number)
@@ -234,6 +239,14 @@ def handle_button_click(phone_number, button_id):
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
         send_welcome_videos(phone_number)  # Always send videos
+    elif button_id.startswith('payment_confirmed_'):
+        # User confirmed they have paid
+        transaction_id = button_id.replace('payment_confirmed_', '')
+        handle_payment_confirmation(phone_number, transaction_id)
+    elif button_id.startswith('payment_cancelled_'):
+        # User wants to cancel payment
+        transaction_id = button_id.replace('payment_cancelled_', '')
+        handle_payment_cancellation(phone_number, transaction_id)
     else:
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
@@ -559,6 +572,185 @@ def clear_payment_session(phone_number):
         log_error(f"Error clearing payment session: {str(e)}", phone_number)
 
 
+def send_payment_status_message(phone_number, payment, status):
+    """Send payment status message with interactive buttons"""
+    header = "⏳ Malipo yako bado yanasubiri uthibitisho"
+    body = f"""Hali: {status}
+
+Nambari ya malipo: {payment.gateway_transaction_id}
+
+Utapata ujumbe wa uthibitisho mara tu malipo yatakapokamilika.
+
+Je, umeshafanya malipo au unataka kughairi?"""
+    footer = "Chagua chini"
+    
+    buttons = [
+        {
+            "type": "reply",
+            "reply": {
+                "id": f"payment_confirmed_{payment.gateway_transaction_id}",
+                "title": "Nimeshalipia"
+            }
+        },
+        {
+            "type": "reply",
+            "reply": {
+                "id": f"payment_cancelled_{payment.gateway_transaction_id}",
+                "title": "Nimeghairi"
+            }
+        }
+    ]
+    
+    send_interactive_message(phone_number, header, body, footer, buttons)
+
+
+def handle_payment_confirmation(phone_number, transaction_id):
+    """Handle when user confirms they have paid"""
+    try:
+        # Find the payment by transaction ID
+        payment = Payment.objects.filter(
+            gateway_transaction_id=transaction_id,
+            vote__phone_number=phone_number,
+            status__in=['pending', 'initiated']
+        ).first()
+        
+        if not payment:
+            send_text_message(phone_number, "Malipo huo haujapatikana. Tafadhali jaribu tena.")
+            return
+        
+        # Check payment status again
+        status_result = check_payment_status(
+            transaction_id=payment.gateway_transaction_id,
+            reference_id=payment.gateway_reference
+        )
+        
+        if status_result['success']:
+            if status_result['status'] == 'paid':
+                # Payment confirmed successful
+                payment.status = 'paid'
+                payment.vote.is_paid = True
+                payment.vote.save()
+                payment.save()
+                
+                # Generate tickets
+                generate_tickets(payment.vote)
+                
+                # Send success message
+                send_payment_confirmation(phone_number, payment.vote)
+                clear_user_session(phone_number)
+                log_payment(phone_number, payment.amount, 'confirmed_paid', payment.gateway_transaction_id)
+                
+            else:
+                # Payment still not confirmed by gateway
+                send_text_message(phone_number, f"⏳ Malipo bado haujathibitishwa na mfumo wa malipo.\n\nHali: {status_result['status']}\n\nTafadhali subiri kidogo au wasiliana na msaada wa kiufundi.")
+                log_payment(phone_number, payment.amount, 'user_confirmed_but_gateway_pending', payment.gateway_transaction_id)
+        else:
+            # Status check failed
+            send_text_message(phone_number, f"❌ Hajaweza kuangalia hali ya malipo.\n\nHitilafu: {status_result.get('message', 'Unknown error')}\n\nTafadhali jaribu tena baadaye.")
+            
+    except Exception as e:
+        log_error(f"Error handling payment confirmation: {str(e)}", phone_number)
+        send_text_message(phone_number, "Kuna hitilafu katika kuthibitisha malipo. Tafadhali jaribu tena baadaye.")
+
+
+def handle_payment_cancellation(phone_number, transaction_id):
+    """Handle when user wants to cancel payment"""
+    try:
+        # Find the payment by transaction ID
+        payment = Payment.objects.filter(
+            gateway_transaction_id=transaction_id,
+            vote__phone_number=phone_number,
+            status__in=['pending', 'initiated']
+        ).first()
+        
+        if not payment:
+            send_text_message(phone_number, "Malipo huo haujapatikana. Tafadhali jaribu tena.")
+            return
+        
+        # Cancel the payment
+        payment.status = 'cancelled'
+        payment.save()
+        
+        # Clear user session
+        clear_user_session(phone_number)
+        clear_payment_session(phone_number)
+        
+        # Send cancellation message
+        send_text_message(phone_number, "❌ Malipo yameghairiwa.\n\nSession imefutwa. Unaweza kuanza upya.")
+        
+        # Send welcome message
+        user, is_new_user = get_or_create_user(phone_number)
+        send_welcome_message(phone_number, is_new_user)
+        send_welcome_videos(phone_number)
+        
+        log_payment(phone_number, payment.amount, 'cancelled_by_user', payment.gateway_transaction_id)
+        
+    except Exception as e:
+        log_error(f"Error handling payment cancellation: {str(e)}", phone_number)
+        send_text_message(phone_number, "Kuna hitilafu katika kughairi malipo. Tafadhali jaribu tena baadaye.")
+
+
+def check_payment_status_manual(phone_number):
+    """Manually check payment status for a user"""
+    try:
+        # Find any pending payments for this user
+        pending_payments = Payment.objects.filter(
+            vote__phone_number=phone_number,
+            status__in=['pending', 'initiated']
+        )
+        
+        if not pending_payments.exists():
+            send_text_message(phone_number, "Hakuna malipo yanayosubiri uthibitisho.")
+            return
+        
+        for payment in pending_payments:
+            # Check payment status
+            status_result = check_payment_status(
+                transaction_id=payment.gateway_transaction_id,
+                reference_id=payment.gateway_reference
+            )
+            
+            if status_result['success']:
+                if status_result['status'] == 'paid':
+                    # Payment successful
+                    payment.status = 'paid'
+                    payment.vote.is_paid = True
+                    payment.vote.save()
+                    payment.save()
+                    
+                    # Generate tickets
+                    generate_tickets(payment.vote)
+                    
+                    # Send success message
+                    send_payment_confirmation(phone_number, payment.vote)
+                    clear_user_session(phone_number)
+                    log_payment(phone_number, payment.amount, 'completed_manual', payment.gateway_transaction_id)
+                    return
+                    
+                elif status_result['status'] in ['failed', 'cancelled', 'expired']:
+                    # Payment failed
+                    payment.status = status_result['status']
+                    payment.save()
+                    
+                    send_text_message(phone_number, f"❌ Malipo yamekataliwa au yameisha muda.\n\nHali: {status_result['status']}\n\nTafadhali jaribu tena.")
+                    clear_user_session(phone_number)
+                    log_payment(phone_number, payment.amount, f'failed_manual_{status_result["status"]}', payment.gateway_transaction_id)
+                    return
+                    
+                else:
+                    # Still pending - send interactive message with buttons
+                    send_payment_status_message(phone_number, payment, status_result['status'])
+                    return
+            else:
+                # Status check failed
+                send_text_message(phone_number, f"❌ Hajaweza kuangalia hali ya malipo.\n\nHitilafu: {status_result.get('message', 'Unknown error')}\n\nTafadhali jaribu tena baadaye.")
+                return
+                
+    except Exception as e:
+        log_error(f"Error checking payment status manually: {str(e)}", phone_number)
+        send_text_message(phone_number, "Kuna hitilafu katika kuangalia hali ya malipo. Tafadhali jaribu tena baadaye.")
+
+
 def check_payment_status_after_delay(phone_number, payment):
     """Check payment status after a delay"""
     import threading
@@ -607,6 +799,22 @@ def check_payment_status_after_delay(phone_number, payment):
                 clear_user_session(phone_number)
                 log_payment(phone_number, payment.amount, f'failed_{status_result["status"]}', payment.gateway_transaction_id)
                 
+            elif status_result['status'] == 'unknown':
+                # Status unknown, check if payment is still pending after reasonable time
+                # If it's been more than 5 minutes, assume it failed
+                import time
+                time_since_initiated = time.time() - payment.created_at.timestamp()
+                if time_since_initiated > 300:  # 5 minutes
+                    payment.status = 'expired'
+                    payment.save()
+                    
+                    send_text_message(phone_number, f"⏰ Malipo yameisha muda.\n\nMalipo hayajakamilika ndani ya muda uliopangwa.\n\nTafadhali jaribu tena.")
+                    clear_user_session(phone_number)
+                    log_payment(phone_number, payment.amount, 'expired_timeout', payment.gateway_transaction_id)
+                else:
+                    # Still within reasonable time, check again
+                    time.sleep(60)
+                    check_payment_status_after_delay(phone_number, payment)
             else:
                 # Still pending, check again in 60 seconds
                 time.sleep(60)
