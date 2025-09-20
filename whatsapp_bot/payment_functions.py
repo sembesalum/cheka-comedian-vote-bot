@@ -185,13 +185,28 @@ def check_payment_status(transaction_id, reference_id=None, api_key=None):
         response_data = json.loads(response.text)
         
         if response_data.get('code') == 200:
-            # Get transaction status from response
-            transaction_status = response_data.get('data', {}).get('status', 'unknown')
+            # Get transaction status from response - check the order array
+            orders = response_data.get('order', [])
+            if orders and len(orders) > 0:
+                # Get the first order (should be the one we're looking for)
+                order = orders[0]
+                transaction_status = order.get('status', 'unknown')
+                amount = order.get('amount', 0)
+                phone_number = order.get('phone_number', '')
+                payment_time = order.get('payment_time', '')
+                is_settled = order.get('is_settled', False)
+            else:
+                transaction_status = 'unknown'
+                amount = 0
+                phone_number = ''
+                payment_time = ''
+                is_settled = False
             
             # Map gateway status to your system status
             status_mapping = {
                 'completed': 'paid',
                 'success': 'paid',
+                'paid': 'paid',
                 'pending': 'pending',
                 'failed': 'failed',
                 'cancelled': 'cancelled',
@@ -207,8 +222,12 @@ def check_payment_status(transaction_id, reference_id=None, api_key=None):
                 'transaction_id': transaction_id,
                 'status': mapped_status,
                 'gateway_status': transaction_status,
+                'amount': amount,
+                'phone_number': phone_number,
+                'payment_time': payment_time,
+                'is_settled': is_settled,
                 'message': f'Payment status: {mapped_status}',
-                'details': response_data.get('data', {}),
+                'details': response_data,
                 'checked_at': datetime.now().isoformat()
             }
         else:
