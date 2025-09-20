@@ -56,6 +56,8 @@ def initiate_payment(phone_number, amount, package_id=None, agent_id=None, api_k
         }
         
         # Make API request
+        log_payment(phone_number, amount, 'api_request', transaction_id)
+        
         response = requests.post(
             payment_gateway_url, 
             json=payment_data, 
@@ -63,18 +65,23 @@ def initiate_payment(phone_number, amount, package_id=None, agent_id=None, api_k
             timeout=30
         )
         
+        # Log raw response
+        log_payment(phone_number, amount, 'api_response', transaction_id)
+        
         # Parse response
         response_data = json.loads(response.text)
         
         if response_data.get('code') == 200:
             # Payment initiated successfully
-            reference = json.loads(response_data.get('selcom', '{}')).get('reference', '')
+            reference = ''
+            try:
+                if 'selcom' in response_data and response_data['selcom']:
+                    reference = json.loads(response_data.get('selcom', '{}')).get('reference', '')
+            except (json.JSONDecodeError, TypeError):
+                reference = response_data.get('selcom', '')
             
             # Log payment initiation
-            log_payment(phone_number, amount, 'initiated', transaction_id, {
-                'reference': reference,
-                'gateway_response': response_data
-            })
+            log_payment(phone_number, amount, 'initiated', transaction_id)
             
             return {
                 'success': True,
@@ -113,7 +120,14 @@ def initiate_payment(phone_number, amount, package_id=None, agent_id=None, api_k
             'transaction_id': transaction_id if 'transaction_id' in locals() else None
         }
     except Exception as e:
-        log_error(f"Payment initiation error: {str(e)}", phone_number, {'transaction_id': transaction_id})
+        import traceback
+        error_details = {
+            'transaction_id': transaction_id if 'transaction_id' in locals() else None,
+            'error_type': type(e).__name__,
+            'error_message': str(e),
+            'traceback': traceback.format_exc()
+        }
+        log_error(f"Payment initiation error: {str(e)}", phone_number, error_details)
         return {
             'success': False,
             'message': 'An unexpected error occurred',
@@ -186,11 +200,7 @@ def check_payment_status(transaction_id, reference_id=None, api_key=None):
             
             mapped_status = status_mapping.get(transaction_status.lower(), 'unknown')
             
-            log_payment('system', 0, f'status_check_{mapped_status}', transaction_id, {
-                'gateway_status': transaction_status,
-                'mapped_status': mapped_status,
-                'gateway_response': response_data
-            })
+            log_payment('system', 0, f'status_check_{mapped_status}', transaction_id)
             
             return {
                 'success': True,
