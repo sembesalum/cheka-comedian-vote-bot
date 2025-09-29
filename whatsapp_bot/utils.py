@@ -197,8 +197,6 @@ def handle_button_click(phone_number, button_id):
     """Handle button clicks"""
     if button_id == 'start_voting':
         send_comedians_with_images(phone_number)
-    elif button_id == 'show_comedians_list':
-        send_comedians_list(phone_number)
     elif button_id == 'play_again':
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
@@ -338,7 +336,7 @@ def send_comedians_list(phone_number):
 
 
 def send_comedians_with_images(phone_number):
-    """Send comedians with their images separately, then show list button"""
+    """Send comedians with their images separately, then show list directly"""
     comedians = Comedian.objects.filter(is_active=True)
     
     if not comedians.exists():
@@ -348,8 +346,11 @@ def send_comedians_with_images(phone_number):
     # Send each comedian with their image
     for comedian in comedians:
         if comedian.image:
-            # Send image with comedian name
-            send_image_message(phone_number, comedian.image.url, f"🎭 {comedian.name}")
+            # Try to send image with comedian name
+            result = send_image_message(phone_number, comedian.image.url, f"🎭 {comedian.name}")
+            if not result:
+                # If image sending fails, fall back to text
+                send_text_message(phone_number, f"🎭 {comedian.name}")
         else:
             # Send just the name if no image
             send_text_message(phone_number, f"🎭 {comedian.name}")
@@ -358,41 +359,48 @@ def send_comedians_with_images(phone_number):
         import time
         time.sleep(1)
     
-    # After showing all comedians, send the list button
-    send_comedians_list_button(phone_number)
+    # After showing all comedians, directly show the list
+    send_comedians_list(phone_number)
 
 
 def send_image_message(phone_number, image_url, caption=""):
     """Send an image message"""
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone_number,
-        "type": "image",
-        "image": {
-            "link": image_url,
-            "caption": caption
-        }
-    }
-    return whatsapp_api_call(payload)
-
-
-def send_comedians_list_button(phone_number):
-    """Send button to show comedians list"""
-    header = "Comedians Wameonyeshwa"
-    body = "Hapa juu ni comedians wote. Sasa bonyeza 'Chagua Comedian' ili uweze kumpigia kura comedian wako pendwa."
-    footer = "Chagua chini ili uendelee"
-    
-    buttons = [
-        {
-            "type": "reply",
-            "reply": {
-                "id": "show_comedians_list",
-                "title": "Chagua Comedian"
+    try:
+        # Convert relative URL to absolute URL
+        if image_url.startswith('/'):
+            from django.conf import settings
+            # Determine the correct base URL based on environment
+            if 'pythonanywhere.com' in settings.ALLOWED_HOSTS[0]:
+                # Production on PythonAnywhere
+                base_url = f"https://{settings.ALLOWED_HOSTS[0]}"
+            else:
+                # Development
+                base_url = f"http://{settings.ALLOWED_HOSTS[0]}:8000"
+            image_url = f"{base_url}{image_url}"
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone_number,
+            "type": "image",
+            "image": {
+                "link": image_url,
+                "caption": caption
             }
         }
-    ]
-    
-    send_interactive_message(phone_number, header, body, footer, buttons)
+        result = whatsapp_api_call(payload)
+        
+        if result:
+            log_message(phone_number, 'image_sent', f"Image sent: {image_url}")
+        else:
+            log_error(f"Failed to send image: {image_url}", phone_number)
+        
+        return result
+        
+    except Exception as e:
+        log_error(f"Error sending image: {str(e)}", phone_number, {'image_url': image_url})
+        return None
+
+
 
 
 def send_vote_confirmation(phone_number, comedian_name):
