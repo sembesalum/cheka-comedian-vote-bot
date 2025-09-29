@@ -14,9 +14,8 @@ urlpatterns = [
     # Admin interface
     path('admin/', admin_views.dashboard, name='admin_dashboard'),
     path('admin/users/', admin_views.user_management, name='user_management'),
-    path('admin/videos/', admin_views.video_management, name='video_management'),
+    path('admin/comedians/', admin_views.comedian_management, name='comedian_management'),
     path('admin/delete-user/<int:user_id>/', admin_views.delete_user, name='delete_user'),
-    path('admin/add-video/', admin_views.add_video, name='add_video'),
-    path('admin/update-video/<int:video_id>/', admin_views.update_video, name='update_video'),
-    path('admin/delete-video/<int:video_id>/', admin_views.delete_video, name='delete_video'),
+    path('admin/update-comedian-image/<int:comedian_id>/', admin_views.update_comedian_image, name='update_comedian_image'),
+    path('admin/toggle-comedian-status/<int:comedian_id>/', admin_views.toggle_comedian_status, name='toggle_comedian_status'),
 ]

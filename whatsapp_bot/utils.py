@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, WelcomeVideo
+from .models import Comedian, VotingSession, Vote, Ticket, Payment, User
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
@@ -44,31 +44,6 @@ def get_or_create_user(phone_number):
         return user, True
 
 
-def send_youtube_video(phone_number, youtube_url):
-    """Send YouTube video link as text message for embedded playback"""
-    message = youtube_url  # Send only the URL without any title or emoji
-    result = send_text_message(phone_number, message)
-    if result:
-        log_message(phone_number, 'youtube_sent', f"YouTube video sent: {youtube_url}")
-    return result
-
-
-def send_welcome_videos(phone_number):
-    """Send welcome YouTube videos to all users"""
-    videos = WelcomeVideo.objects.filter(is_active=True).order_by('order')
-    
-    if not videos.exists():
-        log_message(phone_number, 'no_videos', "No welcome videos found")
-        return
-    
-    log_message(phone_number, 'sending_videos', f"Sending {videos.count()} welcome YouTube videos")
-    
-    for video in videos:
-        send_youtube_video(phone_number, video.video_url)  # Send without any caption
-        
-        # Small delay between videos to avoid rate limiting
-        import time
-        time.sleep(2)
 
 
 def send_text_message(phone_number, message):
@@ -171,9 +146,8 @@ def handle_text_message(phone_number, text):
         # Also clear any ongoing payment sessions
         clear_payment_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
-        # Always send welcome message and videos when clearing session
+        # Always send welcome message when clearing session
         send_welcome_message(phone_number, is_new_user)
-        send_welcome_videos(phone_number)
         return
 
     # Handle status check command (before ongoing session check)
@@ -212,9 +186,6 @@ def handle_text_message(phone_number, text):
         # Send welcome message
         send_welcome_message(phone_number, is_new_user)
         
-        # Send welcome videos to ALL users (new and returning)
-        send_welcome_videos(phone_number)
-        
         # If new user, mark as no longer first-time
         if is_new_user:
             user.is_first_time = False
@@ -225,12 +196,13 @@ def handle_text_message(phone_number, text):
 def handle_button_click(phone_number, button_id):
     """Handle button clicks"""
     if button_id == 'start_voting':
+        send_comedians_with_images(phone_number)
+    elif button_id == 'show_comedians_list':
         send_comedians_list(phone_number)
     elif button_id == 'play_again':
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
-        send_welcome_videos(phone_number)  # Always send videos
     elif button_id == 'clear_session':
         clear_user_session(phone_number)
         clear_payment_session(phone_number)  # Also clear payment sessions
@@ -238,7 +210,6 @@ def handle_button_click(phone_number, button_id):
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
-        send_welcome_videos(phone_number)  # Always send videos
     elif button_id.startswith('payment_confirmed_'):
         # User confirmed they have paid
         transaction_id = button_id.replace('payment_confirmed_', '')
@@ -251,7 +222,6 @@ def handle_button_click(phone_number, button_id):
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
-        send_welcome_videos(phone_number)  # Always send videos
 
 
 def handle_list_selection(phone_number, list_id):
@@ -312,14 +282,12 @@ def send_welcome_message(phone_number, is_new_user=False):
         header = "Karibu! Comedian Bora wa Mwezi"
         body = """Karibu kuchagua comedian bora wa mwezi! 🎉
 
-Kama mtumiaji mpya, utapata videos maalum za kukaribisha! 📹
-
 Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
 
 Andika # ili ufute session yoyote inaendelea."""
     else:
         header = "Karibu Tena! Comedian Bora wa Mwezi"
-        body = """Karibu tena! Utapata videos maalum za kukaribisha! 📹
+        body = """Karibu tena!
 
 Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
 
@@ -367,6 +335,64 @@ def send_comedians_list(phone_number):
         })
     
     send_list_message(phone_number, header, body, footer, "Chagua Comedian", sections)
+
+
+def send_comedians_with_images(phone_number):
+    """Send comedians with their images separately, then show list button"""
+    comedians = Comedian.objects.filter(is_active=True)
+    
+    if not comedians.exists():
+        send_text_message(phone_number, "Hakuna comedians waliopo kwa sasa.")
+        return
+    
+    # Send each comedian with their image
+    for comedian in comedians:
+        if comedian.image:
+            # Send image with comedian name
+            send_image_message(phone_number, comedian.image.url, f"🎭 {comedian.name}")
+        else:
+            # Send just the name if no image
+            send_text_message(phone_number, f"🎭 {comedian.name}")
+        
+        # Small delay between messages
+        import time
+        time.sleep(1)
+    
+    # After showing all comedians, send the list button
+    send_comedians_list_button(phone_number)
+
+
+def send_image_message(phone_number, image_url, caption=""):
+    """Send an image message"""
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone_number,
+        "type": "image",
+        "image": {
+            "link": image_url,
+            "caption": caption
+        }
+    }
+    return whatsapp_api_call(payload)
+
+
+def send_comedians_list_button(phone_number):
+    """Send button to show comedians list"""
+    header = "Comedians Wameonyeshwa"
+    body = "Hapa juu ni comedians wote. Sasa bonyeza 'Chagua Comedian' ili uweze kumpigia kura comedian wako pendwa."
+    footer = "Chagua chini ili uendelee"
+    
+    buttons = [
+        {
+            "type": "reply",
+            "reply": {
+                "id": "show_comedians_list",
+                "title": "Chagua Comedian"
+            }
+        }
+    ]
+    
+    send_interactive_message(phone_number, header, body, footer, buttons)
 
 
 def send_vote_confirmation(phone_number, comedian_name):
@@ -681,7 +707,6 @@ def handle_payment_cancellation(phone_number, transaction_id):
         # Send welcome message
         user, is_new_user = get_or_create_user(phone_number)
         send_welcome_message(phone_number, is_new_user)
-        send_welcome_videos(phone_number)
         
         log_payment(phone_number, payment.amount, 'cancelled_by_user', payment.gateway_transaction_id)
         

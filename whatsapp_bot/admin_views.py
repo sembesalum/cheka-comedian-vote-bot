@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
-from .models import User, WelcomeVideo
+from .models import User, WelcomeVideo, Comedian
 from .session_functions import clear_user_session
 from .logger import log_session
 import json
@@ -41,6 +41,25 @@ def video_management(request):
     }
     
     return render(request, 'admin/video_management.html', context)
+
+
+def comedian_management(request):
+    """Comedian management interface"""
+    comedians = Comedian.objects.all().order_by('name')
+    
+    # Search functionality
+    search = request.GET.get('search', '')
+    if search:
+        comedians = comedians.filter(name__icontains=search)
+    
+    context = {
+        'comedians': comedians,
+        'search': search,
+        'total_comedians': Comedian.objects.count(),
+        'active_comedians': Comedian.objects.filter(is_active=True).count(),
+    }
+    
+    return render(request, 'admin/comedian_management.html', context)
 
 
 @csrf_exempt
@@ -162,6 +181,60 @@ def delete_video(request, video_id):
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 
+@csrf_exempt
+def update_comedian_image(request, comedian_id):
+    """Update comedian image"""
+    if request.method == 'POST':
+        try:
+            comedian = get_object_or_404(Comedian, id=comedian_id)
+            
+            if 'image' in request.FILES:
+                comedian.image = request.FILES['image']
+                comedian.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Image updated for {comedian.name}',
+                    'image_url': comedian.image.url if comedian.image else None
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No image file provided'
+                })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating image: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def toggle_comedian_status(request, comedian_id):
+    """Toggle comedian active status"""
+    if request.method == 'POST':
+        try:
+            comedian = get_object_or_404(Comedian, id=comedian_id)
+            comedian.is_active = not comedian.is_active
+            comedian.save()
+            
+            status = 'activated' if comedian.is_active else 'deactivated'
+            return JsonResponse({
+                'success': True,
+                'message': f'{comedian.name} {status} successfully',
+                'is_active': comedian.is_active
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating status: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
 def dashboard(request):
     """Admin dashboard"""
     context = {
@@ -169,8 +242,8 @@ def dashboard(request):
         'new_users_today': User.objects.filter(
             created_at__date=timezone.now().date()
         ).count(),
-        'total_videos': WelcomeVideo.objects.count(),
-        'active_videos': WelcomeVideo.objects.filter(is_active=True).count(),
+        'total_comedians': Comedian.objects.count(),
+        'active_comedians': Comedian.objects.filter(is_active=True).count(),
         'recent_users': User.objects.all()[:10],
     }
     

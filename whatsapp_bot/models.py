@@ -36,6 +36,7 @@ class WelcomeVideo(models.Model):
 
 class Comedian(models.Model):
     name = models.CharField(max_length=100, unique=True)
+    image = models.ImageField(upload_to='comedians/', blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     

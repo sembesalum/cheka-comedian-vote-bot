@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comedian Management - WhatsApp Bot Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .comedian-card {
+            transition: transform 0.2s;
+        }
+        .comedian-card:hover {
+            transform: translateY(-2px);
+        }
+        .image-preview {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .no-image {
+            width: 80px;
+            height: 80px;
+            background-color: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'admin_dashboard' %}">
+                <i class="fas fa-robot"></i> WhatsApp Bot Admin
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{% url 'admin_dashboard' %}">Dashboard</a>
+                <a class="nav-link" href="{% url 'user_management' %}">Users</a>
+                <a class="nav-link active" href="{% url 'comedian_management' %}">Comedians</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-users"></i> Comedian Management</h2>
+                    <div class="d-flex gap-2">
+                        <form method="GET" class="d-flex">
+                            <input type="text" name="search" class="form-control" placeholder="Search comedians..." value="{{ search }}">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ total_comedians }}</h4>
+                                        <p class="mb-0">Total Comedians</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-users fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ active_comedians }}</h4>
+                                        <p class="mb-0">Active Comedians</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-check-circle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ total_comedians|add:"-"|add:active_comedians }}</h4>
+                                        <p class="mb-0">Inactive Comedians</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-pause-circle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Comedians List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Comedians List</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if comedians %}
+                            <div class="row">
+                                {% for comedian in comedians %}
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card comedian-card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-start">
+                                                <div class="me-3">
+                                                    {% if comedian.image %}
+                                                        <img src="{{ comedian.image.url }}" alt="{{ comedian.name }}" class="image-preview">
+                                                    {% else %}
+                                                        <div class="no-image">
+                                                            <i class="fas fa-user fa-2x"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="card-title mb-1">{{ comedian.name }}</h6>
+                                                    <span class="badge {% if comedian.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                                        {% if comedian.is_active %}Active{% else %}Inactive{% endif %}
+                                                    </span>
+                                                    <p class="card-text text-muted small mb-2">
+                                                        Created: {{ comedian.created_at|date:"M d, Y" }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <div class="btn-group w-100" role="group">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="uploadImage({{ comedian.id }})">
+                                                        <i class="fas fa-image"></i> Image
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-{% if comedian.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="toggleStatus({{ comedian.id }}, {{ comedian.is_active|yesno:'false,true' }})">
+                                                        <i class="fas fa-{% if comedian.is_active %}pause{% else %}play{% endif %}"></i>
+                                                        {% if comedian.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No comedians found</h5>
+                                {% if search %}
+                                    <p class="text-muted">No comedians match your search criteria.</p>
+                                {% else %}
+                                    <p class="text-muted">No comedians have been added yet.</p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Upload Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Comedian Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="imageForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="imageFile" class="form-label">Select Image</label>
+                            <input type="file" class="form-control" id="imageFile" accept="image/*" required>
+                            <div class="form-text">Supported formats: JPG, PNG, GIF. Max size: 5MB</div>
+                        </div>
+                        <div id="imagePreview" class="text-center" style="display: none;">
+                            <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-width: 200px;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitImage()">Upload Image</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentComedianId = null;
+
+        function uploadImage(comedianId) {
+            currentComedianId = comedianId;
+            document.getElementById('imageForm').reset();
+            document.getElementById('imagePreview').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('imageModal')).show();
+        }
+
+        function toggleStatus(comedianId, currentStatus) {
+            if (confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'activate'} this comedian?`)) {
+                fetch(`/admin/toggle-comedian-status/${comedianId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while updating comedian status.');
+                });
+            }
+        }
+
+        function submitImage() {
+            const formData = new FormData();
+            const imageFile = document.getElementById('imageFile').files[0];
+            
+            if (!imageFile) {
+                alert('Please select an image file.');
+                return;
+            }
+
+            formData.append('image', imageFile);
+
+            fetch(`/admin/update-comedian-image/${currentComedianId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while uploading the image.');
+            });
+        }
+
+        // Image preview
+        document.getElementById('imageFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

@@ -176,18 +176,18 @@
                 <div class="stat-label">New Users Today</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ total_videos }}</div>
-                <div class="stat-label">Total Videos</div>
+                <div class="stat-number">{{ total_comedians }}</div>
+                <div class="stat-label">Total Comedians</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{ active_videos }}</div>
-                <div class="stat-label">Active Videos</div>
+                <div class="stat-number">{{ active_comedians }}</div>
+                <div class="stat-label">Active Comedians</div>
             </div>
         </div>
         
         <div class="nav-buttons">
             <a href="{% url 'user_management' %}" class="nav-btn">👥 Manage Users</a>
-            <a href="{% url 'video_management' %}" class="nav-btn">🎥 Manage Videos</a>
+            <a href="{% url 'comedian_management' %}" class="nav-btn">🎭 Manage Comedians</a>
             <a href="{% url 'logs_view' %}" class="nav-btn">📋 View Logs</a>
         </div>
         
