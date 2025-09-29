@@ -369,12 +369,19 @@ def send_image_message(phone_number, image_url, caption=""):
         # Convert relative URL to absolute URL
         if image_url.startswith('/'):
             from django.conf import settings
-            # Determine the correct base URL based on environment
-            if 'pythonanywhere.com' in settings.ALLOWED_HOSTS[0]:
+            # Always use production domain for image URLs
+            # Check if we're in production by looking for pythonanywhere.com in any allowed host
+            production_domain = None
+            for host in settings.ALLOWED_HOSTS:
+                if 'pythonanywhere.com' in host:
+                    production_domain = host
+                    break
+            
+            if production_domain:
                 # Production on PythonAnywhere
-                base_url = f"https://{settings.ALLOWED_HOSTS[0]}"
+                base_url = f"https://{production_domain}"
             else:
-                # Development
+                # Development fallback
                 base_url = f"http://{settings.ALLOWED_HOSTS[0]}:8000"
             image_url = f"{base_url}{image_url}"
         
