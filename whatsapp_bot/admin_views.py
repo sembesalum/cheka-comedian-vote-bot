@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
-from .models import User, WelcomeVideo, Comedian
+from .models import User, WelcomeVideo, Comedian, Ad
 from .session_functions import clear_user_session
 from .logger import log_session
 import json
@@ -60,6 +60,25 @@ def comedian_management(request):
     }
     
     return render(request, 'admin/comedian_management.html', context)
+
+
+def ads_management(request):
+    """Ads management interface"""
+    ads = Ad.objects.all().order_by('-created_at')
+    
+    # Search functionality
+    search = request.GET.get('search', '')
+    if search:
+        ads = ads.filter(title__icontains=search)
+    
+    context = {
+        'ads': ads,
+        'search': search,
+        'total_ads': Ad.objects.count(),
+        'active_ads': Ad.objects.filter(is_active=True).count(),
+    }
+    
+    return render(request, 'admin/ads_management.html', context)
 
 
 @csrf_exempt
@@ -235,6 +254,124 @@ def toggle_comedian_status(request, comedian_id):
     return JsonResponse({'success': False, 'message': 'Invalid request'})
 
 
+@csrf_exempt
+def add_ad(request):
+    """Add new ad"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            title = data.get('title', '')
+            sponsor_name = data.get('sponsor_name', 'NBC Kiganjani')
+            description = data.get('description', '')
+            
+            if not title:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Title is required'
+                })
+            
+            ad = Ad.objects.create(
+                title=title,
+                sponsor_name=sponsor_name,
+                description=description
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Ad added successfully',
+                'ad': {
+                    'id': ad.id,
+                    'title': ad.title,
+                    'sponsor_name': ad.sponsor_name,
+                    'description': ad.description,
+                    'is_active': ad.is_active
+                }
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error adding ad: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def update_ad_image(request, ad_id):
+    """Update ad image"""
+    if request.method == 'POST':
+        try:
+            ad = get_object_or_404(Ad, id=ad_id)
+            
+            if 'image' in request.FILES:
+                ad.image = request.FILES['image']
+                ad.save()
+                
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Image updated for {ad.title}',
+                    'image_url': ad.image.url if ad.image else None
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'No image file provided'
+                })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating image: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def toggle_ad_status(request, ad_id):
+    """Toggle ad active status"""
+    if request.method == 'POST':
+        try:
+            ad = get_object_or_404(Ad, id=ad_id)
+            ad.is_active = not ad.is_active
+            ad.save()
+            
+            status = 'activated' if ad.is_active else 'deactivated'
+            return JsonResponse({
+                'success': True,
+                'message': f'{ad.title} {status} successfully',
+                'is_active': ad.is_active
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating status: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def delete_ad(request, ad_id):
+    """Delete ad"""
+    if request.method == 'POST':
+        try:
+            ad = get_object_or_404(Ad, id=ad_id)
+            title = ad.title
+            ad.delete()
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Ad "{title}" deleted successfully'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error deleting ad: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
 def dashboard(request):
     """Admin dashboard"""
     context = {
@@ -244,6 +381,9 @@ def dashboard(request):
         ).count(),
         'total_comedians': Comedian.objects.count(),
         'active_comedians': Comedian.objects.filter(is_active=True).count(),
+        'total_ads': Ad.objects.count(),
+        'active_ads': Ad.objects.filter(is_active=True).count(),
+        'free_vote_users': User.objects.filter(has_used_free_vote=True).count(),
         'recent_users': User.objects.all()[:10],
     }
     

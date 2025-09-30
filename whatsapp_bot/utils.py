@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from .models import Comedian, VotingSession, Vote, Ticket, Payment, User
+from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Ad
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
@@ -254,16 +254,36 @@ def handle_list_selection(phone_number, list_id):
     elif list_id.startswith('quantity_'):
         quantity = int(list_id.replace('quantity_', ''))
         log_message(phone_number, 'quantity_selection', f"Selected quantity: {quantity}")
+        
         # Get the last vote for this phone number
         last_vote = Vote.objects.filter(phone_number=phone_number).order_by('-created_at').first()
         if last_vote:
             # Update vote with selected quantity
             last_vote.quantity = quantity
-            last_vote.amount = quantity * 1000  # TZS 1000 per vote
-            last_vote.save()
             
-            # Ask for payment phone number
-            ask_for_payment_phone(phone_number, last_vote)
+            # Check if this is a free vote
+            if quantity == 1:
+                # Free vote - check if user can use it
+                user, _ = get_or_create_user(phone_number)
+                if user.has_used_free_vote:
+                    send_text_message(phone_number, "Umeshafanya kura ya bure. Tafadhali chagua moja ya chaguzi zingine.")
+                    send_comedians_list(phone_number)
+                    return
+                
+                # Process free vote
+                process_free_vote(phone_number, last_vote)
+            else:
+                # Paid vote - set amount based on quantity
+                amount_mapping = {
+                    5: 1000,
+                    10: 2000,
+                    50: 5000
+                }
+                last_vote.amount = amount_mapping.get(quantity, 0)
+                last_vote.save()
+                
+                # Ask for payment phone number
+                ask_for_payment_phone(phone_number, last_vote)
         else:
             log_error("No vote found for quantity selection", phone_number)
             user, is_new_user = get_or_create_user(phone_number)
@@ -442,31 +462,40 @@ def send_vote_confirmation(phone_number, comedian_name):
         body = "Kamalisha Kupiga Kura\n\nChagua idadi ya kura unayotaka kupiga:"
         footer = "Chagua idadi ya kura"
         
+        # Get user to check if they've used free vote
+        user, _ = get_or_create_user(phone_number)
+        
         sections = [{
             "title": "Chagua Idadi ya Kura",
-            "rows": [
-                {
-                    "id": "quantity_1",
-                    "title": "Kura 1 (TZS 1000)",
-                    "description": "Kura moja na tiket 1"
-                },
-                {
-                    "id": "quantity_3",
-                    "title": "Kura 3 (TZS 3000)",
-                    "description": "Kura tatu na tiketi 3"
-                },
-                {
-                    "id": "quantity_5",
-                    "title": "Kura 5 (TZS 5000)",
-                    "description": "Kura tano na tiketi 6"
-                },
-                {
-                    "id": "quantity_12",
-                    "title": "Kura 12 (TZS 10000)",
-                    "description": "Kura kumi na mbili"
-                }
-            ]
+            "rows": []
         }]
+        
+        # Add free vote option if user hasn't used it
+        if not user.has_used_free_vote:
+            sections[0]["rows"].append({
+                "id": "quantity_1",
+                "title": "Kura 1 (BURE)",
+                "description": "Kura moja sponsored by NBC Kiganjani"
+            })
+        
+        # Add paid options
+        sections[0]["rows"].extend([
+            {
+                "id": "quantity_5",
+                "title": "Kura 5 (TZS 1,000)",
+                "description": "Lipia kupiga kura 5 kwa pamoja"
+            },
+            {
+                "id": "quantity_10",
+                "title": "Kura 10 (TZS 2,000)",
+                "description": "Lipia kupiga kura 10 kwa pamoja"
+            },
+            {
+                "id": "quantity_50",
+                "title": "Kura 50 (TZS 5,000)",
+                "description": "Lipia kupiga kura 50 kwa pamoja"
+            }
+        ])
         
         send_list_message(phone_number, header, body, footer, "Chagua Idadi", sections)
         
@@ -479,13 +508,96 @@ def send_vote_confirmation(phone_number, comedian_name):
 
 def generate_tickets(vote):
     """Generate tickets for a vote"""
-    # Generate tickets based on quantity (5 votes = 6 tickets as per requirement)
+    # Generate tickets based on quantity
     ticket_count = vote.quantity
+    
+    # Special cases for bonus tickets
     if vote.quantity == 5:
-        ticket_count = 6  # Special case: 5 votes = 6 tickets
+        ticket_count = 6  # 5 votes = 6 tickets
+    elif vote.quantity == 10:
+        ticket_count = 12  # 10 votes = 12 tickets
+    elif vote.quantity == 50:
+        ticket_count = 60  # 50 votes = 60 tickets
     
     for _ in range(ticket_count):
         Ticket.objects.create(vote=vote)
+
+
+def process_free_vote(phone_number, vote):
+    """Process a free vote with sponsored ad"""
+    try:
+        # Get a random active ad
+        ad = Ad.objects.filter(is_active=True).order_by('?').first()
+        
+        if not ad:
+            # No ad available, still process the free vote
+            ad = None
+            log_message(phone_number, 'no_ad_available', "No active ads available for free vote")
+        
+        # Update vote as free
+        vote.amount = 0
+        vote.is_paid = True
+        vote.is_free_vote = True
+        vote.ad = ad
+        vote.save()
+        
+        # Mark user as having used free vote
+        user, _ = get_or_create_user(phone_number)
+        user.has_used_free_vote = True
+        user.save()
+        
+        # Send sponsored ad if available
+        if ad and ad.image:
+            send_image_message(phone_number, ad.image.url, f"🎯 {ad.title}\n\n{ad.description or ''}")
+        elif ad:
+            # Send text ad if no image
+            send_text_message(phone_number, f"🎯 {ad.title}\n\n{ad.description or ''}")
+        
+        # Generate tickets
+        generate_tickets(vote)
+        
+        # Send confirmation
+        send_free_vote_confirmation(phone_number, vote)
+        
+        # Clear session
+        clear_user_session(phone_number)
+        
+        log_message(phone_number, 'free_vote_processed', f"Free vote processed for {vote.comedian.name}")
+        
+    except Exception as e:
+        log_error(f"Error processing free vote: {str(e)}", phone_number)
+        send_text_message(phone_number, "Kuna hitilafu katika kusindikiza kura ya bure. Tafadhali jaribu tena.")
+        clear_user_session(phone_number)
+
+
+def send_free_vote_confirmation(phone_number, vote):
+    """Send free vote confirmation with tickets"""
+    tickets = vote.tickets.all()
+    ticket_codes = [ticket.ticket_code for ticket in tickets]
+    
+    header = f"Ahsante kwa kupigia kura {vote.comedian.name} (BURE)"
+    body = f"""Vote Details 
+Umempigia kura {vote.quantity} (BURE)
+
+Umepata tickets {len(ticket_codes)} ambazo ni:
+{chr(10).join(ticket_codes)}
+
+Washindi watangazwa tarehe {vote.voting_session.winner_announcement_date.strftime('%d.%m.%Y')}
+
+Asante kwa kushiriki!"""
+    footer = "Asante kwa kushiriki"
+    
+    buttons = [
+        {
+            "type": "reply",
+            "reply": {
+                "id": "play_again",
+                "title": "Cheza Tena"
+            }
+        }
+    ]
+    
+    send_interactive_message(phone_number, header, body, footer, buttons)
 
 
 def ask_for_payment_phone(phone_number, vote):

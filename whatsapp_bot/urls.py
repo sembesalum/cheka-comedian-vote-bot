@@ -15,7 +15,12 @@ urlpatterns = [
     path('admin/', admin_views.dashboard, name='admin_dashboard'),
     path('admin/users/', admin_views.user_management, name='user_management'),
     path('admin/comedians/', admin_views.comedian_management, name='comedian_management'),
+    path('admin/ads/', admin_views.ads_management, name='ads_management'),
     path('admin/delete-user/<int:user_id>/', admin_views.delete_user, name='delete_user'),
     path('admin/update-comedian-image/<int:comedian_id>/', admin_views.update_comedian_image, name='update_comedian_image'),
     path('admin/toggle-comedian-status/<int:comedian_id>/', admin_views.toggle_comedian_status, name='toggle_comedian_status'),
+    path('admin/add-ad/', admin_views.add_ad, name='add_ad'),
+    path('admin/update-ad-image/<int:ad_id>/', admin_views.update_ad_image, name='update_ad_image'),
+    path('admin/toggle-ad-status/<int:ad_id>/', admin_views.toggle_ad_status, name='toggle_ad_status'),
+    path('admin/delete-ad/<int:ad_id>/', admin_views.delete_ad, name='delete_ad'),
 ]

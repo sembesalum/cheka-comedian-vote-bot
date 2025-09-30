@@ -9,6 +9,7 @@ class User(models.Model):
     """Model to track users and their first-time status"""
     phone_number = models.CharField(max_length=20, unique=True)
     is_first_time = models.BooleanField(default=True)
+    has_used_free_vote = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_interaction = models.DateTimeField(auto_now=True)
     
@@ -32,6 +33,22 @@ class WelcomeVideo(models.Model):
     
     class Meta:
         ordering = ['order']
+
+
+class Ad(models.Model):
+    """Model to store sponsored ads for free votes"""
+    title = models.CharField(max_length=100)
+    image = models.ImageField(upload_to='ads/', blank=True, null=True)
+    sponsor_name = models.CharField(max_length=100, default="NBC Kiganjani")
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.title} - {self.sponsor_name}"
+    
+    class Meta:
+        ordering = ['-created_at']
 
 
 class Comedian(models.Model):
@@ -64,10 +81,10 @@ class VotingSession(models.Model):
 
 class Vote(models.Model):
     VOTE_QUANTITY_CHOICES = [
-        (1, '1 Vote - TZS 1000'),
-        (3, '3 Votes - TZS 3000'),
-        (5, '5 Votes - TZS 5000'),
-        (12, '12 Votes - TZS 10000'),
+        (1, '1 Vote - FREE (Sponsored by NBC Kiganjani)'),
+        (5, '5 Votes - TZS 1,000'),
+        (10, '10 Votes - TZS 2,000'),
+        (50, '50 Votes - TZS 5,000'),
     ]
     
     comedian = models.ForeignKey(Comedian, on_delete=models.CASCADE)
@@ -76,6 +93,8 @@ class Vote(models.Model):
     quantity = models.IntegerField(choices=VOTE_QUANTITY_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     is_paid = models.BooleanField(default=False)
+    is_free_vote = models.BooleanField(default=False)
+    ad = models.ForeignKey('Ad', on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):

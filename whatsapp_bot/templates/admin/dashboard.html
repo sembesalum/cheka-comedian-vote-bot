@@ -183,11 +183,24 @@
                 <div class="stat-number">{{ active_comedians }}</div>
                 <div class="stat-label">Active Comedians</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ total_ads }}</div>
+                <div class="stat-label">Total Ads</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ active_ads }}</div>
+                <div class="stat-label">Active Ads</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ free_vote_users }}</div>
+                <div class="stat-label">Free Vote Users</div>
+            </div>
         </div>
         
         <div class="nav-buttons">
             <a href="{% url 'user_management' %}" class="nav-btn">👥 Manage Users</a>
             <a href="{% url 'comedian_management' %}" class="nav-btn">🎭 Manage Comedians</a>
+            <a href="{% url 'ads_management' %}" class="nav-btn">📢 Manage Ads</a>
             <a href="{% url 'logs_view' %}" class="nav-btn">📋 View Logs</a>
         </div>
         

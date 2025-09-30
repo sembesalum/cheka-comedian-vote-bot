@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ads Management - WhatsApp Bot Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .ad-card {
+            transition: transform 0.2s;
+        }
+        .ad-card:hover {
+            transform: translateY(-2px);
+        }
+        .image-preview {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .no-image {
+            width: 80px;
+            height: 80px;
+            background-color: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{% url 'admin_dashboard' %}">
+                <i class="fas fa-robot"></i> WhatsApp Bot Admin
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{% url 'admin_dashboard' %}">Dashboard</a>
+                <a class="nav-link" href="{% url 'user_management' %}">Users</a>
+                <a class="nav-link" href="{% url 'comedian_management' %}">Comedians</a>
+                <a class="nav-link active" href="{% url 'ads_management' %}">Ads</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-bullhorn"></i> Ads Management</h2>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" onclick="showAddAdModal()">
+                            <i class="fas fa-plus"></i> Add New Ad
+                        </button>
+                        <form method="GET" class="d-flex">
+                            <input type="text" name="search" class="form-control" placeholder="Search ads..." value="{{ search }}">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ total_ads }}</h4>
+                                        <p class="mb-0">Total Ads</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-bullhorn fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ active_ads }}</h4>
+                                        <p class="mb-0">Active Ads</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-check-circle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h4>{{ total_ads|add:"-"|add:active_ads }}</h4>
+                                        <p class="mb-0">Inactive Ads</p>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-pause-circle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ads List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Ads List</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if ads %}
+                            <div class="row">
+                                {% for ad in ads %}
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card ad-card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-start">
+                                                <div class="me-3">
+                                                    {% if ad.image %}
+                                                        <img src="{{ ad.image.url }}" alt="{{ ad.title }}" class="image-preview">
+                                                    {% else %}
+                                                        <div class="no-image">
+                                                            <i class="fas fa-image fa-2x"></i>
+                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="flex-grow-1">
+                                                    <h6 class="card-title mb-1">{{ ad.title }}</h6>
+                                                    <p class="card-text text-muted small mb-1">{{ ad.sponsor_name }}</p>
+                                                    {% if ad.description %}
+                                                        <p class="card-text small mb-2">{{ ad.description|truncatechars:50 }}</p>
+                                                    {% endif %}
+                                                    <span class="badge {% if ad.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                                        {% if ad.is_active %}Active{% else %}Inactive{% endif %}
+                                                    </span>
+                                                    <p class="card-text text-muted small mb-2">
+                                                        Created: {{ ad.created_at|date:"M d, Y" }}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div class="mt-3">
+                                                <div class="btn-group w-100" role="group">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="uploadAdImage({{ ad.id }})">
+                                                        <i class="fas fa-image"></i> Image
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-{% if ad.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="toggleAdStatus({{ ad.id }}, {{ ad.is_active|yesno:'false,true' }})">
+                                                        <i class="fas fa-{% if ad.is_active %}pause{% else %}play{% endif %}"></i>
+                                                        {% if ad.is_active %}Deactivate{% else %}Activate{% endif %}
+                                                    </button>
+                                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteAd({{ ad.id }}, '{{ ad.title }}')">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-bullhorn fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No ads found</h5>
+                                {% if search %}
+                                    <p class="text-muted">No ads match your search criteria.</p>
+                                {% else %}
+                                    <p class="text-muted">No ads have been added yet.</p>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Ad Modal -->
+    <div class="modal fade" id="addAdModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Ad</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addAdForm">
+                        <div class="mb-3">
+                            <label for="adTitle" class="form-label">Title *</label>
+                            <input type="text" class="form-control" id="adTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sponsorName" class="form-label">Sponsor Name</label>
+                            <input type="text" class="form-control" id="sponsorName" value="NBC Kiganjani">
+                        </div>
+                        <div class="mb-3">
+                            <label for="adDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="adDescription" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitAd()">Add Ad</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Upload Modal -->
+    <div class="modal fade" id="imageModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Upload Ad Image</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="imageForm" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="imageFile" class="form-label">Select Image</label>
+                            <input type="file" class="form-control" id="imageFile" accept="image/*" required>
+                            <div class="form-text">Supported formats: JPG, PNG, GIF. Max size: 5MB</div>
+                        </div>
+                        <div id="imagePreview" class="text-center" style="display: none;">
+                            <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-width: 200px;">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitImage()">Upload Image</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentAdId = null;
+
+        function showAddAdModal() {
+            document.getElementById('addAdForm').reset();
+            new bootstrap.Modal(document.getElementById('addAdModal')).show();
+        }
+
+        function submitAd() {
+            const title = document.getElementById('adTitle').value;
+            const sponsorName = document.getElementById('sponsorName').value;
+            const description = document.getElementById('adDescription').value;
+
+            if (!title) {
+                alert('Please enter a title.');
+                return;
+            }
+
+            fetch('/admin/add-ad/', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    title: title,
+                    sponsor_name: sponsorName,
+                    description: description
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while adding the ad.');
+            });
+        }
+
+        function uploadAdImage(adId) {
+            currentAdId = adId;
+            document.getElementById('imageForm').reset();
+            document.getElementById('imagePreview').style.display = 'none';
+            new bootstrap.Modal(document.getElementById('imageModal')).show();
+        }
+
+        function toggleAdStatus(adId, currentStatus) {
+            if (confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'activate'} this ad?`)) {
+                fetch(`/admin/toggle-ad-status/${adId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while updating ad status.');
+                });
+            }
+        }
+
+        function deleteAd(adId, adTitle) {
+            if (confirm(`Are you sure you want to delete "${adTitle}"?`)) {
+                fetch(`/admin/delete-ad/${adId}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken'),
+                        'Content-Type': 'application/json',
+                    },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while deleting the ad.');
+                });
+            }
+        }
+
+        function submitImage() {
+            const formData = new FormData();
+            const imageFile = document.getElementById('imageFile').files[0];
+            
+            if (!imageFile) {
+                alert('Please select an image file.');
+                return;
+            }
+
+            formData.append('image', imageFile);
+
+            fetch(`/admin/update-ad-image/${currentAdId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while uploading the image.');
+            });
+        }
+
+        // Image preview
+        document.getElementById('imageFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('previewImg').src = e.target.result;
+                    document.getElementById('imagePreview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>
