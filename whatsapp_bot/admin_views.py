@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
-from .models import User, WelcomeVideo, Comedian, Ad
+from .models import User, WelcomeVideo, Comedian, Ad, NomineesImage
 from .session_functions import clear_user_session
 from .logger import log_session
 import json
@@ -52,11 +52,15 @@ def comedian_management(request):
     if search:
         comedians = comedians.filter(name__icontains=search)
     
+    # Get the active nominees image
+    nominees_image = NomineesImage.objects.filter(is_active=True).first()
+    
     context = {
         'comedians': comedians,
         'search': search,
         'total_comedians': Comedian.objects.count(),
         'active_comedians': Comedian.objects.filter(is_active=True).count(),
+        'nominees_image': nominees_image,
     }
     
     return render(request, 'admin/comedian_management.html', context)
@@ -367,6 +371,51 @@ def delete_ad(request, ad_id):
             return JsonResponse({
                 'success': False,
                 'message': f'Error deleting ad: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def upload_nominees_image(request):
+    """Upload nominees image"""
+    if request.method == 'POST':
+        try:
+            title = request.POST.get('title', '')
+            description = request.POST.get('description', '')
+            
+            if not title:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Title is required'
+                })
+            
+            if 'image' not in request.FILES:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Image file is required'
+                })
+            
+            # Deactivate any existing active nominees images
+            NomineesImage.objects.filter(is_active=True).update(is_active=False)
+            
+            # Create new nominees image
+            nominees_image = NomineesImage.objects.create(
+                title=title,
+                description=description,
+                image=request.FILES['image'],
+                is_active=True
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'Nominees image uploaded successfully',
+                'image_url': nominees_image.image.url
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error uploading image: {str(e)}'
             })
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})

@@ -23,4 +23,5 @@ urlpatterns = [
     path('admin/update-ad-image/<int:ad_id>/', admin_views.update_ad_image, name='update_ad_image'),
     path('admin/toggle-ad-status/<int:ad_id>/', admin_views.toggle_ad_status, name='toggle_ad_status'),
     path('admin/delete-ad/<int:ad_id>/', admin_views.delete_ad, name='delete_ad'),
+    path('admin/upload-nominees-image/', admin_views.upload_nominees_image, name='upload_nominees_image'),
 ]

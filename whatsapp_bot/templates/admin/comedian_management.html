@@ -110,6 +110,52 @@
                     </div>
                 </div>
 
+                <!-- Nominees Image Management -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-image"></i> Nominees Image Management</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <p class="text-muted">Upload a single image containing all nominees. This image will be shown to users when they start voting.</p>
+                                <form id="nomineesImageForm" enctype="multipart/form-data">
+                                    <div class="mb-3">
+                                        <label for="nomineesTitle" class="form-label">Image Title</label>
+                                        <input type="text" class="form-control" id="nomineesTitle" placeholder="e.g., Comedian Bora wa Mwezi" value="{{ nominees_image.title|default:'' }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="nomineesDescription" class="form-label">Description</label>
+                                        <textarea class="form-control" id="nomineesDescription" rows="3" placeholder="Description text to show with the image">{{ nominees_image.description|default:'' }}</textarea>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="nomineesImageFile" class="form-label">Select Image</label>
+                                        <input type="file" class="form-control" id="nomineesImageFile" accept="image/*">
+                                        <div class="form-text">Supported formats: JPG, PNG, GIF. Max size: 10MB</div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary" onclick="uploadNomineesImage()">
+                                        <i class="fas fa-upload"></i> Upload Image
+                                    </button>
+                                </form>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="text-center">
+                                    <h6>Current Image</h6>
+                                    {% if nominees_image and nominees_image.image %}
+                                        <img src="{{ nominees_image.image.url }}" alt="Current nominees image" class="img-thumbnail" style="max-width: 200px;">
+                                        <p class="text-muted small mt-2">{{ nominees_image.title }}</p>
+                                    {% else %}
+                                        <div class="no-image" style="width: 200px; height: 150px; margin: 0 auto;">
+                                            <i class="fas fa-image fa-3x"></i>
+                                            <p class="text-muted">No image uploaded</p>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Comedians List -->
                 <div class="card">
                     <div class="card-header">
@@ -124,13 +170,9 @@
                                         <div class="card-body">
                                             <div class="d-flex align-items-start">
                                                 <div class="me-3">
-                                                    {% if comedian.image %}
-                                                        <img src="{{ comedian.image.url }}" alt="{{ comedian.name }}" class="image-preview">
-                                                    {% else %}
-                                                        <div class="no-image">
-                                                            <i class="fas fa-user fa-2x"></i>
-                                                        </div>
-                                                    {% endif %}
+                                                    <div class="no-image">
+                                                        <i class="fas fa-user fa-2x"></i>
+                                                    </div>
                                                 </div>
                                                 <div class="flex-grow-1">
                                                     <h6 class="card-title mb-1">{{ comedian.name }}</h6>
@@ -144,9 +186,6 @@
                                             </div>
                                             <div class="mt-3">
                                                 <div class="btn-group w-100" role="group">
-                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="uploadImage({{ comedian.id }})">
-                                                        <i class="fas fa-image"></i> Image
-                                                    </button>
                                                     <button type="button" class="btn btn-outline-{% if comedian.is_active %}warning{% else %}success{% endif %} btn-sm" onclick="toggleStatus({{ comedian.id }}, {{ comedian.is_active|yesno:'false,true' }})">
                                                         <i class="fas fa-{% if comedian.is_active %}pause{% else %}play{% endif %}"></i>
                                                         {% if comedian.is_active %}Deactivate{% else %}Activate{% endif %}
@@ -175,45 +214,9 @@
         </div>
     </div>
 
-    <!-- Image Upload Modal -->
-    <div class="modal fade" id="imageModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Upload Comedian Image</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="imageForm" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="imageFile" class="form-label">Select Image</label>
-                            <input type="file" class="form-control" id="imageFile" accept="image/*" required>
-                            <div class="form-text">Supported formats: JPG, PNG, GIF. Max size: 5MB</div>
-                        </div>
-                        <div id="imagePreview" class="text-center" style="display: none;">
-                            <img id="previewImg" src="" alt="Preview" class="img-thumbnail" style="max-width: 200px;">
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="button" class="btn btn-primary" onclick="submitImage()">Upload Image</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let currentComedianId = null;
-
-        function uploadImage(comedianId) {
-            currentComedianId = comedianId;
-            document.getElementById('imageForm').reset();
-            document.getElementById('imagePreview').style.display = 'none';
-            new bootstrap.Modal(document.getElementById('imageModal')).show();
-        }
-
         function toggleStatus(comedianId, currentStatus) {
             if (confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'activate'} this comedian?`)) {
                 fetch(`/admin/toggle-comedian-status/${comedianId}/`, {
@@ -238,18 +241,27 @@
             }
         }
 
-        function submitImage() {
+        function uploadNomineesImage() {
             const formData = new FormData();
-            const imageFile = document.getElementById('imageFile').files[0];
+            const title = document.getElementById('nomineesTitle').value;
+            const description = document.getElementById('nomineesDescription').value;
+            const imageFile = document.getElementById('nomineesImageFile').files[0];
             
+            if (!title.trim()) {
+                alert('Please enter a title for the image.');
+                return;
+            }
+
             if (!imageFile) {
                 alert('Please select an image file.');
                 return;
             }
 
+            formData.append('title', title);
+            formData.append('description', description);
             formData.append('image', imageFile);
 
-            fetch(`/admin/update-comedian-image/${currentComedianId}/`, {
+            fetch('/admin/upload-nominees-image/', {
                 method: 'POST',
                 headers: {
                     'X-CSRFToken': getCookie('csrftoken'),
@@ -269,19 +281,6 @@
                 alert('An error occurred while uploading the image.');
             });
         }
-
-        // Image preview
-        document.getElementById('imageFile').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    document.getElementById('previewImg').src = e.target.result;
-                    document.getElementById('imagePreview').style.display = 'block';
-                };
-                reader.readAsDataURL(file);
-            }
-        });
 
         function getCookie(name) {
             let cookieValue = null;
