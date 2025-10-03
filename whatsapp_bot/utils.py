@@ -325,8 +325,13 @@ def send_comedians_with_images(phone_number):
     nominees_image = NomineesImage.objects.filter(is_active=True).first()
     
     if nominees_image and nominees_image.image:
-        # Send the nominees image first
-        send_image_message(phone_number, nominees_image.image.url, nominees_image.description or "")
+        # Send the nominees image first with instruction
+        image_caption = f"{nominees_image.description or ''}\n\nBonyeza 'Piga Kura' chini ili uanze kupiga kura"
+        send_image_message(phone_number, nominees_image.image.url, image_caption)
+        
+        # Add a small delay to ensure image is sent first
+        import time
+        time.sleep(2)
         
         # Then send the interactive message with voting button
         header = nominees_image.title
