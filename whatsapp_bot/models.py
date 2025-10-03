@@ -64,6 +64,21 @@ class Comedian(models.Model):
         ordering = ['name']
 
 
+class NomineesImage(models.Model):
+    """Model to store the single image containing all nominees"""
+    title = models.CharField(max_length=200, default="Comedian Bora wa Mwezi")
+    image = models.ImageField(upload_to='nominees/', blank=True, null=True)
+    description = models.TextField(blank=True, help_text="Description text to show with the image")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.title} - {'Active' if self.is_active else 'Inactive'}"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
 class VotingSession(models.Model):
     name = models.CharField(max_length=200)
     is_active = models.BooleanField(default=True)

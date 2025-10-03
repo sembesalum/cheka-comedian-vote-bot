@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Ad
+from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Ad, NomineesImage
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
@@ -183,8 +183,8 @@ def handle_text_message(phone_number, text):
         clear_user_session(phone_number)
         clear_payment_session(phone_number)
         
-        # Send welcome message
-        send_welcome_message(phone_number, is_new_user)
+        # Send nominees image and voting button
+        send_comedians_with_images(phone_number)
         
         # If new user, mark as no longer first-time
         if is_new_user:
@@ -196,7 +196,7 @@ def handle_text_message(phone_number, text):
 def handle_button_click(phone_number, button_id):
     """Handle button clicks"""
     if button_id == 'start_voting':
-        send_comedians_with_images(phone_number)
+        send_comedians_list(phone_number)
     elif button_id == 'play_again':
         # Get user status for welcome message
         user, is_new_user = get_or_create_user(phone_number)
@@ -318,7 +318,7 @@ Andika # ili ufute session yoyote inaendelea."""
             "type": "reply",
             "reply": {
                 "id": "start_voting",
-                "title": "Bonyeza Kupiga Kura"
+                "title": "Piga Kura"
             }
         },
         {
@@ -356,31 +356,39 @@ def send_comedians_list(phone_number):
 
 
 def send_comedians_with_images(phone_number):
-    """Send comedians with their images separately, then show list directly"""
+    """Send single image with all nominees and voting button"""
     comedians = Comedian.objects.filter(is_active=True)
     
     if not comedians.exists():
         send_text_message(phone_number, "Hakuna comedians waliopo kwa sasa.")
         return
     
-    # Send each comedian with their image
-    for comedian in comedians:
-        if comedian.image:
-            # Try to send image with comedian name
-            result = send_image_message(phone_number, comedian.image.url, f"🎭 {comedian.name}")
-            if not result:
-                # If image sending fails, fall back to text
-                send_text_message(phone_number, f"🎭 {comedian.name}")
-        else:
-            # Send just the name if no image
-            send_text_message(phone_number, f"🎭 {comedian.name}")
-        
-        # Small delay between messages
-        import time
-        time.sleep(1)
+    # Get the active nominees image
+    nominees_image = NomineesImage.objects.filter(is_active=True).first()
     
-    # After showing all comedians, directly show the list
-    send_comedians_list(phone_number)
+    if nominees_image and nominees_image.image:
+        # Send the nominees image first
+        send_image_message(phone_number, nominees_image.image.url, nominees_image.description or "")
+        
+        # Then send the interactive message with voting button
+        header = nominees_image.title
+        body = "Chagua comedian wako pendwa kutoka kwenye picha hapo juu na bonyeza 'Piga Kura'"
+        footer = "Chagua chini ili uanze kupiga kura"
+        
+        buttons = [
+            {
+                "type": "reply",
+                "reply": {
+                    "id": "start_voting",
+                    "title": "Piga Kura"
+                }
+            }
+        ]
+        
+        send_interactive_message(phone_number, header, body, footer, buttons)
+    else:
+        # Fallback to text message if no image is available
+        send_text_message(phone_number, "Hakuna picha ya comedians waliopo kwa sasa. Tafadhali wasiliana na msaada wa kiufundi.")
 
 
 def send_image_message(phone_number, image_url, caption=""):
@@ -459,7 +467,7 @@ def send_vote_confirmation(phone_number, comedian_name):
         })
         
         header = f"Umemchagua {comedian_name}"
-        body = "Kamalisha Kupiga Kura\n\nChagua idadi ya kura unayotaka kupiga:"
+        body = "Chagua idadi ya kura unayotaka kupiga:"
         footer = "Chagua idadi ya kura"
         
         # Get user to check if they've used free vote
@@ -577,14 +585,7 @@ def send_free_vote_confirmation(phone_number, vote):
     
     header = f"Ahsante kwa kupigia kura {vote.comedian.name} (BURE)"
     body = f"""Vote Details 
-Umempigia kura {vote.quantity} (BURE)
-
-Umepata tickets {len(ticket_codes)} ambazo ni:
-{chr(10).join(ticket_codes)}
-
-Washindi watangazwa tarehe {vote.voting_session.winner_announcement_date.strftime('%d.%m.%Y')}
-
-Asante kwa kushiriki!"""
+Umempigia kura {vote.quantity} (BURE) Lipia kupiga kura nyingi kwa wakati mmoja"""
     footer = "Asante kwa kushiriki"
     
     buttons = [
@@ -999,14 +1000,7 @@ def send_payment_confirmation(phone_number, vote):
     
     header = f"Ahsante kwa kupigia kura {vote.comedian.name}"
     body = f"""Votes Details 
-Umempigia kura {vote.quantity}
-
-Umepata tickets {len(ticket_codes)} ambazo ni:
-{chr(10).join(ticket_codes)}
-
-Washindi watangazwa tarehe {vote.voting_session.winner_announcement_date.strftime('%d.%m.%Y')}
-
-Vigezo na Masharti kuzingazitwa"""
+Umempigia kura {vote.quantity} Lipia kupiga kura nyingi kwa wakati mmoja"""
     footer = "Asante kwa kushiriki"
     
     buttons = [
