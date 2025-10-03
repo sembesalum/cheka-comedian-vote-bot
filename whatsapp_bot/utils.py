@@ -3,7 +3,7 @@ import json
 from django.conf import settings
 from django.utils import timezone
 from django.db import transaction
-from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Ad, NomineesImage
+from .models import Comedian, VotingSession, Vote, Ticket, Payment, User, Ad, NomineesImage, NBCLink
 from django.core.cache import cache
 from .session_functions import has_ongoing_session, clear_user_session, send_ongoing_session_message, set_user_session, get_user_session
 from .logger import log_error, log_message, log_payment, log_session
@@ -214,6 +214,10 @@ def handle_button_click(phone_number, button_id):
         # User wants to cancel payment
         transaction_id = button_id.replace('payment_cancelled_', '')
         handle_payment_cancellation(phone_number, transaction_id)
+    elif button_id.startswith('tembelea_nbc_'):
+        # User clicked TEMBELEA NBC button
+        nbc_link_id = button_id.replace('tembelea_nbc_', '')
+        handle_tembelea_nbc_click(phone_number, nbc_link_id)
     else:
         # Send nominees image for unknown button clicks
         send_comedians_with_images(phone_number)
@@ -289,6 +293,24 @@ def handle_list_selection(phone_number, list_id):
         send_comedians_with_images(phone_number)
 
 
+
+
+def handle_tembelea_nbc_click(phone_number, nbc_link_id):
+    """Handle TEMBELEA NBC button click"""
+    try:
+        nbc_link = NBCLink.objects.get(id=nbc_link_id, is_active=True)
+        
+        # Send the NBC link
+        send_text_message(phone_number, f"🔗 {nbc_link.title}\n\n{nbc_link.url}")
+        
+        log_message(phone_number, 'tembelea_nbc_clicked', f"NBC link clicked: {nbc_link.url}")
+        
+    except NBCLink.DoesNotExist:
+        log_error(f"NBC link not found: {nbc_link_id}", phone_number)
+        send_text_message(phone_number, "Kiungo cha NBC hakijapatikana. Tafadhali jaribu tena baadaye.")
+    except Exception as e:
+        log_error(f"Error handling TEMBELEA NBC click: {str(e)}", phone_number)
+        send_text_message(phone_number, "Kuna hitilafu katika kufungua kiungo cha NBC. Tafadhali jaribu tena baadaye.")
 
 
 def send_comedians_list(phone_number):
@@ -517,17 +539,21 @@ def process_free_vote(phone_number, vote):
         user.has_used_free_vote = True
         user.save()
         
-        # Send sponsored ad if available
+        # Send sponsored ad FIRST if available
         if ad and ad.image:
             send_image_message(phone_number, ad.image.url, f"🎯 {ad.title}\n\n{ad.description or ''}")
         elif ad:
             # Send text ad if no image
             send_text_message(phone_number, f"🎯 {ad.title}\n\n{ad.description or ''}")
         
+        # Add small delay after ad
+        import time
+        time.sleep(1)
+        
         # Generate tickets
         generate_tickets(vote)
         
-        # Send confirmation
+        # Send confirmation AFTER the ad
         send_free_vote_confirmation(phone_number, vote)
         
         # Clear session
@@ -551,15 +577,28 @@ def send_free_vote_confirmation(phone_number, vote):
 Umempigia kura {vote.quantity} (BURE) Lipia kupiga kura nyingi kwa wakati mmoja"""
     footer = "Asante kwa kushiriki"
     
+    # Get active NBC link
+    nbc_link = NBCLink.objects.filter(is_active=True).first()
+    
     buttons = [
         {
             "type": "reply",
             "reply": {
                 "id": "play_again",
-                "title": "Cheza Tena"
+                "title": "Vote Again"
             }
         }
     ]
+    
+    # Add TEMBELEA NBC button only if NBC link is available
+    if nbc_link:
+        buttons.append({
+            "type": "reply",
+            "reply": {
+                "id": f"tembelea_nbc_{nbc_link.id}",
+                "title": "TEMBELEA NBC"
+            }
+        })
     
     send_interactive_message(phone_number, header, body, footer, buttons)
 
@@ -970,7 +1009,7 @@ Umempigia kura {vote.quantity} Lipia kupiga kura nyingi kwa wakati mmoja"""
             "type": "reply",
             "reply": {
                 "id": "play_again",
-                "title": "Cheza Tena"
+                "title": "Vote Again"
             }
         }
     ]

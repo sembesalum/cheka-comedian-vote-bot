@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils import timezone
 from django.core.cache import cache
-from .models import User, WelcomeVideo, Comedian, Ad, NomineesImage
+from .models import User, WelcomeVideo, Comedian, Ad, NomineesImage, NBCLink
 from .session_functions import clear_user_session
 from .logger import log_session
 import json
@@ -55,12 +55,16 @@ def comedian_management(request):
     # Get the active nominees image
     nominees_image = NomineesImage.objects.filter(is_active=True).first()
     
+    # Get the active NBC link
+    nbc_link = NBCLink.objects.filter(is_active=True).first()
+    
     context = {
         'comedians': comedians,
         'search': search,
         'total_comedians': Comedian.objects.count(),
         'active_comedians': Comedian.objects.filter(is_active=True).count(),
         'nominees_image': nominees_image,
+        'nbc_link': nbc_link,
     }
     
     return render(request, 'admin/comedian_management.html', context)
@@ -416,6 +420,60 @@ def upload_nominees_image(request):
             return JsonResponse({
                 'success': False,
                 'message': f'Error uploading image: {str(e)}'
+            })
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request'})
+
+
+@csrf_exempt
+def update_nbc_link(request):
+    """Update NBC link"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            title = data.get('title', '')
+            url = data.get('url', '')
+            
+            if not title:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Title is required'
+                })
+            
+            if not url:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'URL is required'
+                })
+            
+            # Deactivate any existing active NBC links
+            NBCLink.objects.filter(is_active=True).update(is_active=False)
+            
+            # Create or update NBC link
+            nbc_link, created = NBCLink.objects.get_or_create(
+                title=title,
+                defaults={'url': url, 'is_active': True}
+            )
+            
+            if not created:
+                nbc_link.url = url
+                nbc_link.is_active = True
+                nbc_link.save()
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'NBC link updated successfully',
+                'nbc_link': {
+                    'id': nbc_link.id,
+                    'title': nbc_link.title,
+                    'url': nbc_link.url,
+                    'is_active': nbc_link.is_active
+                }
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'message': f'Error updating NBC link: {str(e)}'
             })
     
     return JsonResponse({'success': False, 'message': 'Invalid request'})

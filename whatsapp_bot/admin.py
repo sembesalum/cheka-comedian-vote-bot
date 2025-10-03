@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, WelcomeVideo, Ad, Comedian, NomineesImage, VotingSession, Vote, Ticket, Payment
+from .models import User, WelcomeVideo, Ad, Comedian, NomineesImage, NBCLink, VotingSession, Vote, Ticket, Payment
 
 # Register your models here.
 
@@ -32,6 +32,12 @@ class NomineesImageAdmin(admin.ModelAdmin):
     list_display = ['title', 'is_active', 'created_at']
     list_filter = ['is_active', 'created_at']
     search_fields = ['title']
+
+@admin.register(NBCLink)
+class NBCLinkAdmin(admin.ModelAdmin):
+    list_display = ['title', 'url', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['title', 'url']
 
 @admin.register(VotingSession)
 class VotingSessionAdmin(admin.ModelAdmin):

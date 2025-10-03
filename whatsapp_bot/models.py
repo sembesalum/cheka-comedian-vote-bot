@@ -79,6 +79,20 @@ class NomineesImage(models.Model):
         ordering = ['-created_at']
 
 
+class NBCLink(models.Model):
+    """Model to store NBC link for TEMBELEA NBC button"""
+    title = models.CharField(max_length=200, default="TEMBELEA NBC")
+    url = models.URLField(help_text="Link to open when TEMBELEA NBC button is clicked")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.title} - {'Active' if self.is_active else 'Inactive'}"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
 class VotingSession(models.Model):
     name = models.CharField(max_length=200)
     is_active = models.BooleanField(default=True)
