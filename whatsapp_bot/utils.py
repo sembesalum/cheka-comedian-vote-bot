@@ -326,7 +326,7 @@ def send_comedians_with_images(phone_number):
     
     if nominees_image and nominees_image.image:
         # Send the nominees image first with instruction
-        image_caption = f"{nominees_image.description or ''}\n\nBonyeza 'Piga Kura' chini ili uanze kupiga kura"
+        image_caption = f"{nominees_image.description}"
         send_image_message(phone_number, nominees_image.image.url, image_caption)
         
         # Add a small delay to ensure image is sent first
@@ -334,9 +334,9 @@ def send_comedians_with_images(phone_number):
         time.sleep(2)
         
         # Then send the interactive message with voting button
-        header = nominees_image.title
-        body = "Chagua comedian wako pendwa kutoka kwenye picha hapo juu na bonyeza 'Piga Kura'"
-        footer = "Chagua chini ili uanze kupiga kura"
+        header = ""
+        body = "Bonyeza 'Piga Kura' chini ili uanze kupiga kura"
+        footer = ""
         
         buttons = [
             {
