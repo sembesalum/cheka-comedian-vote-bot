@@ -146,8 +146,8 @@ def handle_text_message(phone_number, text):
         # Also clear any ongoing payment sessions
         clear_payment_session(phone_number)
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
-        # Always send welcome message when clearing session
-        send_welcome_message(phone_number, is_new_user)
+        # Always send nominees image when clearing session
+        send_comedians_with_images(phone_number)
         return
 
     # Handle status check command (before ongoing session check)
@@ -198,16 +198,14 @@ def handle_button_click(phone_number, button_id):
     if button_id == 'start_voting':
         send_comedians_list(phone_number)
     elif button_id == 'play_again':
-        # Get user status for welcome message
-        user, is_new_user = get_or_create_user(phone_number)
-        send_welcome_message(phone_number, is_new_user)
+        # Send nominees image for play again
+        send_comedians_with_images(phone_number)
     elif button_id == 'clear_session':
         clear_user_session(phone_number)
         clear_payment_session(phone_number)  # Also clear payment sessions
         send_text_message(phone_number, "Session imefutwa. Unaweza kuanza upya.")
-        # Get user status for welcome message
-        user, is_new_user = get_or_create_user(phone_number)
-        send_welcome_message(phone_number, is_new_user)
+        # Send nominees image after clearing session
+        send_comedians_with_images(phone_number)
     elif button_id.startswith('payment_confirmed_'):
         # User confirmed they have paid
         transaction_id = button_id.replace('payment_confirmed_', '')
@@ -217,9 +215,8 @@ def handle_button_click(phone_number, button_id):
         transaction_id = button_id.replace('payment_cancelled_', '')
         handle_payment_cancellation(phone_number, transaction_id)
     else:
-        # Get user status for welcome message
-        user, is_new_user = get_or_create_user(phone_number)
-        send_welcome_message(phone_number, is_new_user)
+        # Send nominees image for unknown button clicks
+        send_comedians_with_images(phone_number)
 
 
 def handle_list_selection(phone_number, list_id):
@@ -286,51 +283,12 @@ def handle_list_selection(phone_number, list_id):
                 ask_for_payment_phone(phone_number, last_vote)
         else:
             log_error("No vote found for quantity selection", phone_number)
-            user, is_new_user = get_or_create_user(phone_number)
-            send_welcome_message(phone_number, is_new_user)
+            send_comedians_with_images(phone_number)
     else:
         log_message(phone_number, 'unknown_selection', f"Unknown selection: {list_id}")
-        user, is_new_user = get_or_create_user(phone_number)
-        send_welcome_message(phone_number, is_new_user)
+        send_comedians_with_images(phone_number)
 
 
-def send_welcome_message(phone_number, is_new_user=False):
-    """Send welcome message with voting button"""
-    if is_new_user:
-        header = "Karibu! Comedian Bora wa Mwezi"
-        body = """Karibu kuchagua comedian bora wa mwezi! 🎉
-
-Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
-
-Andika # ili ufute session yoyote inaendelea."""
-    else:
-        header = "Karibu Tena! Comedian Bora wa Mwezi"
-        body = """Karibu tena!
-
-Sasa utaweza kushinda TV, Friji, Brenda na Simu kwa kushiriki kumpigia kura comedian wako pendwa.
-
-Andika # ili ufute session yoyote inaendelea."""
-    
-    footer = "Chagua chini ili uanze"
-    
-    buttons = [
-        {
-            "type": "reply",
-            "reply": {
-                "id": "start_voting",
-                "title": "Piga Kura"
-            }
-        },
-        {
-            "type": "reply",
-            "reply": {
-                "id": "clear_session",
-                "title": "Futa Session"
-            }
-        }
-    ]
-    
-    send_interactive_message(phone_number, header, body, footer, buttons)
 
 
 def send_comedians_list(phone_number):
@@ -832,9 +790,8 @@ def handle_payment_cancellation(phone_number, transaction_id):
         # Send cancellation message
         send_text_message(phone_number, "❌ Malipo yameghairiwa.\n\nSession imefutwa. Unaweza kuanza upya.")
         
-        # Send welcome message
-        user, is_new_user = get_or_create_user(phone_number)
-        send_welcome_message(phone_number, is_new_user)
+        # Send nominees image
+        send_comedians_with_images(phone_number)
         
         log_payment(phone_number, payment.amount, 'cancelled_by_user', payment.gateway_transaction_id)
         
